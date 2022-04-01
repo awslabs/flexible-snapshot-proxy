@@ -24,11 +24,13 @@ import boto3
 import hashlib
 import numpy as np
 import os
+import io
 import sys
 import time
 import threading
 import math
-from base64 import b64encode
+import zstandard
+from base64 import b64encode, urlsafe_b64encode
 from joblib import Parallel, delayed
 from joblib import wrap_non_picklable_objects
 from joblib.externals.loky import set_loky_pickler
@@ -36,16 +38,17 @@ from multiprocessing import Manager, Value, Lock
 
 AWS_REGION = "us-east-1"
 AWS_DEST_REGION = "us-east-1"
+S3_BUCKET = 'kd-ebs-snaps'
 CHUNK_SIZE = 1024 * 512
 MEGABYTE = 1024 * 1024
 GIGABYTE = MEGABYTE * 1024
+FULL_COPY = False # By default, we skip known zeroed blocks. Set to True if you need a full copy of incrementals.
 if AWS_REGION == AWS_DEST_REGION:
 	NUM_JOBS = 16 # Snapshot gets split into N chunks, each of which is processed using N threads. Total complexity N^2.
 else:
 	NUM_JOBS = 27 # Increase concurrency for cross-region copies for better bandwidth.
                   # The value of 27 has been chosen because we appear to load-balance across 3 endpoints, so makes sense to use power of 3. 
                   # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo.
-FULL_COPY = False # By default, we skip known zeroed blocks. Enable this if you need a full copy of incrementals.
 
 parser = argparse.ArgumentParser(description='EBS DirectAPI Client.')
 parser.add_argument('command', help='copy, diff, download, list, sync, upload, clone, multiclone', type=str)
@@ -138,6 +141,35 @@ def get_blocks_s3(array):
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(get_block_s3)(block, ebs, s3) for block in array)
 
+def put_segments_to_s3(array, volsize):
+    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
+    s3 = boto3.client('s3')
+    h = hashlib.sha256()
+    data = bytearray()
+    offset = array[0]['BlockIndex'];
+    for block in array:
+        resp = try_get_block(ebs, SOURCE, block['BlockIndex'], block['BlockToken'])
+        data += resp['BlockData'].read()
+    h.update(data)
+    print(len(data))
+    s3.put_object(Body=zstandard.compress(data, 1), Bucket=S3_BUCKET, Key="{}.{}/{}.{}.{}.zstd".format(SOURCE, volsize, offset, urlsafe_b64encode(h.digest()).decode(), len(data) // CHUNK_SIZE))
+
+def get_segment_from_s3(object, snap, count):
+    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
+    s3 = boto3.client('s3')
+    h = hashlib.sha256()
+    response = s3.get_object(Bucket=S3_BUCKET, Key=object['Key'])
+    name = object['Key'].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
+    if name[3] == 'zstd':
+        data = zstandard.decompress(response['Body'].read())
+        h.update(data)
+        if urlsafe_b64encode(h.digest()).decode() == name[1]:
+            for i in range(int(name[2])):
+                chunk = data[CHUNK_SIZE*i : CHUNK_SIZE*(i+1)]
+                h.update(chunk)
+                checksum = b64encode(hashlib.sha256(chunk).digest()).decode()
+                try_put_block(ebs, int(name[0])+i, snap, chunk, checksum, count)
+
 def get_block_s3(block, ebs, s3):
     h = hashlib.sha256()
     resp = try_get_block(ebs, SOURCE, block['BlockIndex'], block['BlockToken'])
@@ -147,17 +179,25 @@ def get_block_s3(block, ebs, s3):
     chksum = b64encode(h.digest()).decode()
     if checksum != "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE=" or FULL_COPY: ## Known sparse block checksum we can skip
         if chksum == checksum:
-            s3.put_object(Body=data, Bucket='kd-ebs-snaps', Key="{}/{}".format(SOURCE, block['BlockIndex']))
+            s3.put_object(Body=data, Bucket=S3_BUCKET, Key="{}/{}.{}".format(SOURCE, block['BlockIndex'], h.hexdigest()))
         else:
             print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
             get_block_s3(block,ebs, s3) # We retry indefinitely on checksum failure.
     else:
-        s3.put_object(Body="", Bucket='kd-ebs-snaps', Key="{}/{}".format(SOURCE, block['BlockIndex']))
+        s3.put_object(Body="", Bucket=S3_BUCKET, Key="{}/{}.{}".format(SOURCE, block['BlockIndex'], h.hexdigest()))
 
 def get_blocks(array, files):
     ebs = boto3.client('ebs') # we spawn a client per snapshot segment
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(get_block)(block, ebs, files) for block in array)
+        
+def validate_file_paths(files):
+    for file in files:
+        try:
+            os.fdopen(os.open(file, os.O_RDWR | os.O_CREAT), 'rb+')
+        except io.UnsupportedOperation:
+            print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
+            raise SystemExit
 
 def copy_blocks_to_snap(array, snap, count):
     ebs = boto3.client('ebs') # we spawn a client per snapshot segment
@@ -166,7 +206,6 @@ def copy_blocks_to_snap(array, snap, count):
         parallel2(delayed(copy_block_to_snap)(block, ebs, ebs2, snap, count) for block in array)
 
 def copy_block_to_snap(block, ebs, ebs2, snap, count):
-    h = hashlib.sha256()
     if COMMAND in 'copy':
         resp = try_get_block(ebs, SOURCE, block['BlockIndex'], block['BlockToken'])
     elif COMMAND in 'sync':
@@ -179,6 +218,21 @@ def put_blocks(array, snap_id, OUTFILE, count):
     ebs = boto3.client('ebs')
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(put_block_from_file)(block, ebs, snap_id, OUTFILE, count) for block in array)
+        
+def chunk_and_align(array, gap = 1, offset = 64):
+    result = []
+    segment = []
+    for item in array:
+        if len(segment) == 0:
+            segment.append(item)
+        elif item['BlockIndex']-segment[-1]['BlockIndex'] == gap and item['BlockIndex'] % offset != 0:
+            segment.append(item)
+        else:
+            result.append(segment)
+            segment = []
+            segment.append(item)
+    print(len(result))
+    return result
 
 def main():
     starttime = time.perf_counter()
@@ -216,6 +270,7 @@ def main():
         files = []
         files.append(OUTFILE)
         print(files)
+        validate_file_paths(files)
         with Parallel(n_jobs=NUM_JOBS) as parallel:
             parallel(delayed(get_blocks)(array, files) for array in split)
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
@@ -224,31 +279,49 @@ def main():
         with open(OUTFILE, "r") as f:
             files = f.read().splitlines()
         print(files)
+        validate_file_paths(files)
         with Parallel(n_jobs=NUM_JOBS) as parallel:
             parallel(delayed(get_blocks)(array, files) for array in split)
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
     if COMMAND in 'copy': # Copy to new snapshot.
         gbsize = ec2.describe_snapshots(SnapshotIds=[SOURCE,],)['Snapshots'][0]['VolumeSize']
         count = Counter(Manager(), 0)
-        snap = ebs2.start_snapshot(VolumeSize=gbsize, Description='Copied from '+SOURCE)
-        print(snap['SnapshotId'])
+        snap = ebs2.start_snapshot(VolumeSize=gbsize, Description='Copied by ebs.py from '+SOURCE)
         with Parallel(n_jobs=NUM_JOBS) as parallel:
             parallel(delayed(copy_blocks_to_snap)(array, snap, count) for array in split)
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
         ebs2.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
+        print (snap['SnapshotId'])
     if COMMAND in 'sync': # Synchronize deltas between SnapA and SnapB to SnapC.
         gbsize = ec2.describe_snapshots(SnapshotIds=[SOURCE,],)['Snapshots'][0]['VolumeSize']
         count = Counter(Manager(), 0)
-        snap = ebs.start_snapshot(ParentSnapshotId=DESTSNAP, VolumeSize=gbsize, Description='Copied delta from '+SOURCE+'to'+OUTFILE)
+        snap = ebs.start_snapshot(ParentSnapshotId=DESTSNAP, VolumeSize=gbsize, Description='Copied delta by ebs.py from '+SOURCE+'to'+OUTFILE)
         print(snap['SnapshotId'])
         with Parallel(n_jobs=NUM_JOBS) as parallel:
             parallel(delayed(copy_blocks_to_snap)(array, snap, count) for array in split)
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
         ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
     if COMMAND in 'movetos3': # Experimental - copy individual chunks to S3 as objects. There is currently no logic to restore from S3.
-        with Parallel(n_jobs=NUM_JOBS) as parallel:
-            parallel(delayed(get_blocks_s3)(array) for array in split)
+        # split = np.array_split(blocks,math.ceil(num_blocks/128)) # 64MB segments to potentially concatenate. A lower value impacts performance.
+        gbsize = ec2.describe_snapshots(SnapshotIds=[SOURCE,],)['Snapshots'][0]['VolumeSize']
+        with Parallel(n_jobs=128) as parallel:
+            #parallel(delayed(get_blocks_s3)(array) for array in split)
+            parallel(delayed(put_segments_to_s3)(array, gbsize) for array in chunk_and_align(blocks, 1, 64))
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
+    if COMMAND in 'getfroms3': # Experimental - restore snapshot from S3. 
+        s3 = boto3.client('s3')
+        response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=SOURCE)
+        objects = response['Contents']
+        count = Counter(Manager(), 0)
+        while 'NextContinuationToken' in response:
+            response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=SOURCE, ContinuationToken = response['NextContinuationToken'])
+            objects.extend(response['Contents'])
+        snap = ebs.start_snapshot(VolumeSize= int(objects[0]['Key'].split("/")[0].split(".")[1]), Description='Restored by ebs.py from S3://'+S3_BUCKET+'/'+objects[0]['Key'].split("/")[0])
+        with Parallel(n_jobs = NUM_JOBS) as parallel:
+            parallel(delayed(get_segment_from_s3)(object, snap['SnapshotId'], count) for object in objects)
+        print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - starttime),2), 'bytes/sec.')
+        ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
+        print (snap['SnapshotId'])
     if COMMAND in 'upload': # Upload from file to snapshot(s).
         with os.fdopen(os.open(SOURCE, os.O_RDWR | os.O_CREAT), 'rb+') as f:
             f.seek(0, os.SEEK_END)
@@ -261,10 +334,11 @@ def main():
             snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+SOURCE)
             with Parallel(n_jobs=NUM_JOBS) as parallel:
                 parallel(delayed(put_blocks)(array, snap['SnapshotId'], SOURCE, count) for array in split)
-            print(ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value()))
-            print(COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - starttime),2), 'bytes/sec. for', snap['SnapshotId'])
+            ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
+            print(COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - starttime),2), 'bytes/sec.')
             print('Total chunks uploaded', count.value())
             print('Use the upload functionality at your own risk. Works on my machine...')
+            print(snap['SnapshotId']) # Always print Snapshot ID last, for easy | tail -1
 
 if __name__ == "__main__":
     main()

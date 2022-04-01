@@ -4,7 +4,7 @@ Playground for EBS Direct API experiments
 Pre-requisite install:
 
 ```
-pip3 install boto3 numpy joblib
+pip3 install boto3 numpy joblib zstandard
 ```
 
 Usage examples:
