@@ -5,7 +5,12 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 # Minimum requirements: 4 vCPU, 8GB RAM.
-# Recommended:          8 vCPU, 16GB RAM, dedicated network bandwidth (5Gbps min).
+# Recommended:          8 vCPU, 32GB RAM, dedicated network bandwidth (5Gbps min).
+#
+# The memory requirements depends on Snapshot size. A fully allocated 16TiB 
+# snapshot uses 12.4 GiB RAM for the block index, and 10-16 GiB for the 
+# parallel copy process. If the script crashes due to OOM, you can reduce 
+# the copy memory requirement by reducing NUM_JOBS at the expense of performance.
 #
 # Benchmarked download speed vs. instance type **with** EBS VPC Endpoint:
 # =========== x86  Intel =============
@@ -36,7 +41,10 @@ from joblib import wrap_non_picklable_objects
 from joblib.externals.loky import set_loky_pickler
 from multiprocessing import Manager, Value, Lock
 
-AWS_REGION = "us-east-1"
+if boto3.session.Session().region_name is None:
+    AWS_REGION = "us-east-1" # we assume us-east-1 if region is not configured in aws cli; please change to your actual region.
+else:
+    AWS_REGION = boto3.session.Session().region_name
 AWS_DEST_REGION = "us-east-1"
 S3_BUCKET = 'kd-ebs-snaps'
 CHUNK_SIZE = 1024 * 512
@@ -136,14 +144,14 @@ def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
         try_put_block(ebs, block, snap_id, data, checksum, count)
 
 def get_blocks_s3(array):
-    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
-    s3 = boto3.client('s3')
+    ebs = boto3.client('ebs', region_name=AWS_REGION) # we spawn a client per snapshot segment
+    s3 = boto3.client('s3', region_name=AWS_REGION)
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(get_block_s3)(block, ebs, s3) for block in array)
 
 def put_segments_to_s3(array, volsize):
-    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
-    s3 = boto3.client('s3')
+    ebs = boto3.client('ebs', region_name=AWS_REGION) # we spawn a client per snapshot segment
+    s3 = boto3.client('s3', region_name=AWS_REGION)
     h = hashlib.sha256()
     data = bytearray()
     offset = array[0]['BlockIndex'];
@@ -155,8 +163,8 @@ def put_segments_to_s3(array, volsize):
     s3.put_object(Body=zstandard.compress(data, 1), Bucket=S3_BUCKET, Key="{}.{}/{}.{}.{}.zstd".format(SOURCE, volsize, offset, urlsafe_b64encode(h.digest()).decode(), len(data) // CHUNK_SIZE))
 
 def get_segment_from_s3(object, snap, count):
-    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
-    s3 = boto3.client('s3')
+    ebs = boto3.client('ebs', region_name=AWS_REGION) # we spawn a client per snapshot segment
+    s3 = boto3.client('s3', region_name=AWS_REGION)
     h = hashlib.sha256()
     response = s3.get_object(Bucket=S3_BUCKET, Key=object['Key'])
     name = object['Key'].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
@@ -187,7 +195,7 @@ def get_block_s3(block, ebs, s3):
         s3.put_object(Body="", Bucket=S3_BUCKET, Key="{}/{}.{}".format(SOURCE, block['BlockIndex'], h.hexdigest()))
 
 def get_blocks(array, files):
-    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
+    ebs = boto3.client('ebs', region_name=AWS_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(get_block)(block, ebs, files) for block in array)
         
@@ -200,7 +208,7 @@ def validate_file_paths(files):
             raise SystemExit
 
 def copy_blocks_to_snap(array, snap, count):
-    ebs = boto3.client('ebs') # we spawn a client per snapshot segment
+    ebs = boto3.client('ebs', region_name=AWS_REGION) # we spawn a client per snapshot segment
     ebs2 = boto3.client('ebs', region_name=AWS_DEST_REGION) # Using separate client for upload. This will allow cross-region/account copies.
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(copy_block_to_snap)(block, ebs, ebs2, snap, count) for block in array)
@@ -215,7 +223,7 @@ def copy_block_to_snap(block, ebs, ebs2, snap, count):
     try_put_block(ebs2, block['BlockIndex'], snap['SnapshotId'], data, checksum, count)
 
 def put_blocks(array, snap_id, OUTFILE, count):
-    ebs = boto3.client('ebs')
+    ebs = boto3.client('ebs', region_name=AWS_REGION)
     with Parallel(n_jobs=NUM_JOBS) as parallel2:
         parallel2(delayed(put_block_from_file)(block, ebs, snap_id, OUTFILE, count) for block in array)
         
@@ -236,8 +244,8 @@ def chunk_and_align(array, gap = 1, offset = 64):
 
 def main():
     starttime = time.perf_counter()
-    ec2 = boto3.client("ec2")
-    ebs = boto3.client('ebs')
+    ec2 = boto3.client("ec2", region_name=AWS_REGION)
+    ebs = boto3.client('ebs', region_name=AWS_REGION)
     ebs2 = boto3.client('ebs', region_name=AWS_DEST_REGION) # Using separate client for upload. This will allow cross-region/account copies.
     blocks = []
     if COMMAND in ['diff', 'sync']: # Compute delta between two snapshots and build a list of chunks.
@@ -309,7 +317,7 @@ def main():
             parallel(delayed(put_segments_to_s3)(array, gbsize) for array in chunk_and_align(blocks, 1, 64))
         print (COMMAND,'took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
     if COMMAND in 'getfroms3': # Experimental - restore snapshot from S3. 
-        s3 = boto3.client('s3')
+        s3 = boto3.client('s3', region_name=AWS_REGION)
         response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=SOURCE)
         objects = response['Contents']
         count = Counter(Manager(), 0)
