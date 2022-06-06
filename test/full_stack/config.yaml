@@ -1,0 +1,19 @@
+#Start of Configuration YAML Document
+#Purpose is to allow users of EBS-Playground to tune testing scripts
+---
+#The global parameters
+ami-snapshot: "snap-xxxxxxxxxxx"
+dest-s3bucket: "xxxxxxxxxxx"
+ec2-instanceId: "i-xxxxxxxxxxx"
+original-ami-path: "/xxxxxxxxxx" #must follow these rules: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
+restored-ami-path: "/xxxxxxxxxx" #must follow these rules: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/device_naming.html
+small-volume-path: "xxxxxxxxxxx"
+default-retry-time: 3 #In Seconds
+max-retry-count: 5 #Times to try a failed request
+aws-origin-region: "xx-xxxx-x" #e.g. us-east-1
+aws-availability-zone: "x" #Must be a valid zone for the region
+path-to-small-volume-mount: "/xxxxxxxxxxx" #Absolute path to project directory
+small-volume-snapshots: #small attached ebs volume with empty, half-full and full snapshots. Used to test diff and sync
+    empty: "snap-xxxxxxxxxxx"
+    half: "snap-xxxxxxxxxxx"
+    full: "snap-xxxxxxxxxxx"

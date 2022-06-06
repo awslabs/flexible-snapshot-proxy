@@ -46,11 +46,11 @@ if boto3.session.Session().region_name is None:
 else:
     AWS_REGION = boto3.session.Session().region_name
 AWS_DEST_REGION = "us-east-1"
-S3_BUCKET = 'kd-ebs-snaps'
+S3_BUCKET = 'ownsrob-snapshots'
 CHUNK_SIZE = 1024 * 512
 MEGABYTE = 1024 * 1024
 GIGABYTE = MEGABYTE * 1024
-FULL_COPY = False # By default, we skip known zeroed blocks. Set to True if you need a full copy of incrementals.
+FULL_COPY = False# By default, we skip known zeroed blocks. Set to True if you need a full copy of incrementals.
 if AWS_REGION == AWS_DEST_REGION:
 	NUM_JOBS = 16 # Snapshot gets split into N chunks, each of which is processed using N threads. Total complexity N^2.
 else:
