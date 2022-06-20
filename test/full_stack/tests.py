@@ -9,7 +9,7 @@ from shutil import rmtree
 PATH_TO_FULL_STACK_TESTING = '/test/full_stack' #defined by git directory structure
 
 def read_configuration_file():
-    with open(f"{os.path.dirname(os.path.realpath(__file__))}/config.yaml", 'r') as file:
+    with open(f"{os.path.dirname(os.path.realpath(__file__))}/config_personal.yaml", 'r') as file:
         config = yaml.safe_load(file)
     config['PATH_TO_PROJECT_DIRECTORY'] = os.path.dirname(os.path.realpath(__file__)) + '/../..'
     
@@ -75,12 +75,12 @@ class WorkflowMoveToS3RestoreFromS3(unittest.TestCase):
         ec2 = boto3.client('ec2')
         
         #Run script to move snapshot to s3. Then move from s3 to new snapshot
-        command_one = f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py movetos3 {self.TEST_PARAMETERS['ORG_SNAP']}"
-        command_two = f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py getfroms3 {self.TEST_PARAMETERS['ORG_SNAP']} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"
+        command_one = f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py movetos3 {self.TEST_PARAMETERS['ORG_SNAP']}"
+        command_two = f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py getfroms3 {self.TEST_PARAMETERS['ORG_SNAP']} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"
         print(f"Running Script: {command_one}")
-        self.assertEqual(os.system(f"{command_one}"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command_one}"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
         print(f"Running Script: {command_one}")
-        self.assertEqual(os.system(f"{command_two}"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command_two}"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
         
         new_snapshotId = ''
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -252,9 +252,9 @@ class CanaryListSnapshot(unittest.TestCase):
     def small_test_list(self):
         
         #Run script to move see size of snapshot
-        command = f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py list {self.TEST_PARAMETERS['ORG_SNAP']}"
+        command = f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py list {self.TEST_PARAMETERS['ORG_SNAP']}"
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
         
         #retrieve the command result
         output = ''
@@ -291,10 +291,10 @@ class CanaryDownloadSnapshots(unittest.TestCase):
         os.mkdir(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
         
     def small_test_download(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/output"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/output"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ['','']
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -351,10 +351,10 @@ class CanaryUploadSnapshots(unittest.TestCase):
 
         
     def small_test_upload(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py upload {self.TEST_PARAMETERS['UPLOAD_BLOCKS']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py upload {self.TEST_PARAMETERS['UPLOAD_BLOCKS']}"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ['','']
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -405,10 +405,10 @@ class CanaryCopySnapshot(unittest.TestCase):
 
         
     def small_test_copy(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py copy {self.TEST_PARAMETERS['snapshotId']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py copy {self.TEST_PARAMETERS['snapshotId']}"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ''
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -475,10 +475,10 @@ class CanaryDiffSnapshots(unittest.TestCase):
         os.mkdir(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
         
     def small_test_diff(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py diff {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py diff {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']}"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ''
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -520,10 +520,10 @@ class CanarySyncSnapshots(unittest.TestCase):
 
         
     def small_test_sync(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py sync {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']} {self.TEST_PARAMETERS['snapshotId_parent']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py sync {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']} {self.TEST_PARAMETERS['snapshotId_parent']}"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ''
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -590,10 +590,10 @@ class CanaryMultiCloneSnapshot(unittest.TestCase):
         open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt", mode='a').close() #Create the file to be written to
         
     def small_test_multiclone(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py multiclone {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py multiclone {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         output = ['','']
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
@@ -639,10 +639,10 @@ class CanaryS3Snapshot(unittest.TestCase):
     def small_test_movetos3(self):
         self.CLASS_SCOPE_VARS['DESTROY'] = False #Work Around for deprovisioning test resources too early
         
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py movetos3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py movetos3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(command), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(command), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         s3 = boto3.client('s3')
         objects = []
@@ -664,12 +664,12 @@ class CanaryS3Snapshot(unittest.TestCase):
         self.assertNotEqual(len(objects), 0, f"Uploaded snapshot is not in destination ({self.TEST_PARAMETERS['DEST_S3_BUCKET']}) s3 Bucket")
         
     def small_test_getfroms3(self):
-        command =f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/ebs.py getfroms3 {self.TEST_PARAMETERS['snapshotId']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py getfroms3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
         
         self.CLASS_SCOPE_VARS['DESTROY'] = True #Work Around for deprovisioning test resources too early
         
         print(f"Running Script: {command}")
-        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "ebs.py exited with FAILURE status code") #Ensure the script ran successfully
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
   
         with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
             lines = f.readlines()
