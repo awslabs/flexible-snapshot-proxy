@@ -24,24 +24,20 @@
 # c6gn.16xlarge: 466 MB/s     - max tested       $2.760/hr. (Sep 2021)
 
 
-from queue import Full
 import boto3
+import botocore.exceptions as aws_exceptions
 import hashlib
 import numpy as np
 import os
-import subprocess
 import io
 import sys
 import time
-import threading
 import math
-from traitlets import default
 import zstandard
 from base64 import b64encode, urlsafe_b64encode
 from joblib import Parallel, delayed
-from joblib import wrap_non_picklable_objects
 from joblib.externals.loky import set_loky_pickler
-from multiprocessing import Manager, Value, Lock
+from multiprocessing import Manager
 from urllib.error import HTTPError
 
 import singleton
@@ -72,7 +68,7 @@ def try_get_block(ebs, snapshot_id, blockindex, blocktoken):
         try:
             resp = ebs.get_snapshot_block(SnapshotId=snapshot_id, BlockIndex=blockindex, BlockToken=blocktoken)
             continue
-        except:
+        except Exception as e:
             retry_count += 1    # We catch all errors here, mostly it'll be API throttle events so we just assume. In theory should work with network interruptions as well.
             if retry_count > 1: # Only alert for second retry, but keep trying indefinitely. First-time throttle events happen fairly regularly.
                 print (blocktoken, "throttled by API", retry_count, "times, retrying.")
@@ -105,14 +101,37 @@ def get_block(block, ebs, files, snapshot_id):
     if checksum != "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE=" or singleton.FULL_COPY: ## Known sparse block checksum we can skip
         if chksum == checksum:
             for file in files:
-                with os.fdopen(os.open(file, os.O_RDWR | os.O_CREAT), 'rb+') as f:
+                with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
                     f.seek(block['BlockIndex']*CHUNK_SIZE)
                     f.write(data)
                     f.flush()
                     f.close()
         else:
             print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
-            get_block(block,ebs,files) # We retry indefinitely on checksum failure.
+            get_block(block,ebs,files,snapshot_id) # We retry indefinitely on checksum failure.
+
+def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
+    h = hashlib.sha256()
+    resp = None
+    if 'SecondBlockToken' in block:
+        resp = try_get_block(ebs, snapshot_id_two, block['BlockIndex'], block['SecondBlockToken'])
+    else:
+        resp = try_get_block(ebs, snapshot_id_one, block['BlockIndex'], block['FirstBlockToken'])
+    data = resp['BlockData'].read();
+    checksum = resp['Checksum'];
+    h.update(data)
+    chksum = b64encode(h.digest()).decode()
+    if chksum == checksum:
+        for file in files:
+            with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
+                f.seek(block['BlockIndex']*CHUNK_SIZE)
+                f.write(data)
+                f.flush()
+                f.close()
+    else:
+        print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
+        get_changed_block(block, ebs, files, snapshot_id_two) # We retry indefinitely on checksum failure.
+
 
 def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
     block = int(block)
@@ -124,6 +143,18 @@ def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
         data = data.ljust(CHUNK_SIZE, b'\0')
         checksum = b64encode(hashlib.sha256(data).digest()).decode()
         try_put_block(ebs, block, snap_id, data, checksum, count)
+
+def put_block_from_file_fanout(block, source, f, ebsclient_snaps):
+    block = int(block)
+    with os.fdopen(os.open(source, os.O_RDWR | os.O_CREAT), 'rb+') as f:
+        f.seek((block) * CHUNK_SIZE)
+        data = f.read(CHUNK_SIZE)
+        if not data:
+            return
+        data = data.ljust(CHUNK_SIZE, b'\0')
+        checksum = b64encode(hashlib.sha256(data).digest()).decode()
+        with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel3:
+            parallel3(delayed(try_put_block)(ebsclient_snaps[ebsclient_snap]['client'], block, ebsclient_snaps[ebsclient_snap]['snapshot']['SnapshotId'], data, checksum, ebsclient_snaps[ebsclient_snap]['count']) for ebsclient_snap in ebsclient_snaps)
 
 def get_blocks_s3(array, snapshot_prefix):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
@@ -142,6 +173,10 @@ def put_segments_to_s3(snapshot_id, array, volsize, s3bucket):
         data += resp['BlockData'].read()
     h.update(data)
     s3.put_object(Body=zstandard.compress(data, 1), Bucket=s3bucket, Key="{}.{}/{}.{}.{}.zstd".format(snapshot_id, volsize, offset, urlsafe_b64encode(h.digest()).decode(), len(data) // CHUNK_SIZE))
+
+def put_segments_fanout(array, source, f, ebsclient_snaps):
+    with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel2:
+        parallel2(delayed(put_block_from_file_fanout)(block, source, f, ebsclient_snaps) for block in array)
 
 def get_segment_from_s3(object, snap, count):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
@@ -179,11 +214,16 @@ def get_blocks(array, files, snapshot_id):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(delayed(get_block)(block, ebs, files, snapshot_id) for block in array)
-        
+
+def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
+    ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
+        parallel2(delayed(get_changed_block)(block, ebs, files, snapshot_id_one, snapshot_id_two) for block in array)
+
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_RDWR | os.O_CREAT), 'rb+')
+            os.fdopen(os.open(file, os.O_WRONLY), 'rb+') # On Windows, we can write to raw disk but not read or create, so O_WRONLY is the only way.
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
@@ -235,7 +275,7 @@ def retrieve_snapshot_blocks(snapshot_id):
     
     return blocks
 
-def retrieve_differenal_snapshot_blocks(snapshot_id_one, snapshot_id_two):
+def retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION)
     
     response = ebs.list_changed_blocks(FirstSnapshotId=snapshot_id_one, SecondSnapshotId=snapshot_id_two)
@@ -325,7 +365,7 @@ def diff(snapshot_id_one, snapshot_id_two):
     validate_snapshot(snapshot_id_two)
 
     starttime = time.perf_counter()
-    blocks = retrieve_differenal_snapshot_blocks(snapshot_id_one, snapshot_id_two)
+    blocks = retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two)
     print('Changes between', snapshot_id_one, 'and', snapshot_id_two, 'contain', len(blocks), 'chunks and', CHUNK_SIZE * len(blocks), 'bytes, took', round (time.perf_counter() - starttime,2), "seconds.")
     
 def download(snapshot_id, file_path):
@@ -347,6 +387,24 @@ def download(snapshot_id, file_path):
         parallel(delayed(get_blocks)(array, files, snapshot_id) for array in split)
         
     print('download took',round(time.perf_counter() - starttime, 2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime), 2), 'bytes/sec.')
+
+def deltadownload(snapshot_id_one, snapshot_id_two, file_path):
+    validate_snapshot(snapshot_id_one)
+    validate_snapshot(snapshot_id_two)
+    files = []
+    files.append(file_path)
+    validate_file_paths(files)
+
+    starttime = time.perf_counter()
+    blocks = retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two)
+    split = np.array_split(blocks, singleton.NUM_JOBS)
+    num_blocks = len(blocks)
+    print('Changes between', snapshot_id_one, 'and', snapshot_id_two, 'contain', len(blocks), 'chunks and', CHUNK_SIZE * len(blocks), 'bytes, took', round (time.perf_counter() - starttime,2), "seconds.")
+    
+    print(files)
+    with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
+        parallel(delayed(get_changed_blocks)(array, files, snapshot_id_one, snapshot_id_two) for array in split) # retrieve the blocks of snapshot_one missing in snapshot_two
+    print ('deltadownload took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
 
 def upload(file_path):
     files = []
@@ -373,7 +431,7 @@ def upload(file_path):
         print('Total chunks uploaded', count.value())
         print('Use the upload functionality at your own risk. Works on my machine...')
         print(snap['SnapshotId']) # Always print Snapshot ID last, for easy | tail -1
-    
+
 def copy(snapshot_id):
     validate_snapshot(snapshot_id)
 
@@ -397,7 +455,7 @@ def copy(snapshot_id):
     print('copy took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
     ebs2.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
     print(snap['SnapshotId'])
-    
+
 def sync(snapshot_id_one, snapshot_id_two, destination_snapshot):
     validate_snapshot(snapshot_id_one)
     validate_snapshot(snapshot_id_two)
@@ -405,7 +463,7 @@ def sync(snapshot_id_one, snapshot_id_two, destination_snapshot):
 
 
     starttime = time.perf_counter()
-    blocks = retrieve_differenal_snapshot_blocks(snapshot_id_one, snapshot_id_two)
+    blocks = retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two)
     print('Changes between', snapshot_id_one, 'and', snapshot_id_two, 'contain', len(blocks), 'chunks and', CHUNK_SIZE * len(blocks), 'bytes, took', round (time.perf_counter() - starttime,2), "seconds.")
     
     split = np.array_split(blocks, singleton.NUM_JOBS)
@@ -423,7 +481,7 @@ def sync(snapshot_id_one, snapshot_id_two, destination_snapshot):
         parallel(delayed(copy_blocks_to_snap)('sync', snapshot_id_two, array, snap, count) for array in split)
     print ('sync took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
     ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
-    
+
 def movetos3(snapshot_id):
     validate_snapshot(snapshot_id)
     validate_s3_bucket(singleton.AWS_DEST_REGION, False, True)
@@ -464,7 +522,7 @@ def getfroms3(snapshot_prefix):
     print ('getfroms3 took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - starttime),2), 'bytes/sec.')
     ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
     print (snap['SnapshotId'])
-    
+
 def multiclone(snapshot_id, infile):
     validate_snapshot(snapshot_id)
     files = []
@@ -484,6 +542,33 @@ def multiclone(snapshot_id, infile):
     with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
         parallel(delayed(get_blocks)(array, files, snapshot_id) for array in split)
     print ('multiclone took',round(time.perf_counter() - starttime,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - starttime),2), 'bytes/sec.')
-    
-def fanout():
-    print('FANOUT. NOT SUPPORTED')    
+
+def fanout(devise_path, destination_regions):
+    files = []
+    files.append(devise_path)
+    validate_file_paths(files)
+    #Note destination_regions was validated while singleton was being configured (Near origin and destination regions validation)
+
+    ebsclients = {}
+    snaps = {}
+    ebsclient_snaps = {}
+    with os.fdopen(os.open(devise_path, os.O_RDWR | os.O_CREAT), 'rb+') as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        gbsize = math.ceil(size / GIGABYTE)
+        chunks = size // CHUNK_SIZE
+        split = np.array_split(range(chunks), singleton.NUM_JOBS)
+        print("Size of file is", size, "bytes and", chunks, "chunks. Aligning snapshot to", gbsize, "GiB boundary.")
+        for region in destination_regions:
+            ebsclients[region] = boto3.client('ebs', region_name=region)
+            snaps[region] = ebsclients[region].start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+ devise_path)
+            ebsclient_snaps[region]={"client":ebsclients[region], "snapshot":snaps[region], "count":Counter(Manager(), 0)}
+        print("Spawned", len(ebsclient_snaps), "EBS Clients and started a snapshot in each region.")
+        with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
+            parallel(delayed(put_segments_fanout)(array, devise_path, f, ebsclient_snaps) for array in split)
+        
+        for region in ebsclient_snaps:
+            ebs = ebsclient_snaps[region]['client']
+            snapshot_id = ebsclient_snaps[region]['snapshot']['SnapshotId']
+            count = ebsclient_snaps[region]['count']
+            ebs.complete_snapshot(SnapshotId=snapshot_id, ChangedBlocksCount=count.value())

@@ -284,14 +284,15 @@ class CanaryDownloadSnapshots(unittest.TestCase):
         
         testing_configurations = read_configuration_file()
         
-        self.TEST_PARAMETERS['snapshotId'] = testing_configurations['ami-snapshot']
+        self.TEST_PARAMETERS['snapshotId'] = testing_configurations['small-volume-snapshots']['full']
         self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY']
         self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY'] + PATH_TO_FULL_STACK_TESTING + '/temp'
+        self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE'] = testing_configurations['small-volume-path']
         
         os.mkdir(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
         
     def small_test_download(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/output"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
         
         print(f"Running Script: {command}")
         self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
@@ -307,7 +308,7 @@ class CanaryDownloadSnapshots(unittest.TestCase):
         expected = compute_size_of_snapshot(self.TEST_PARAMETERS["snapshotId"])
 
         self.assertEqual(output[0], f"Snapshot {self.TEST_PARAMETERS['snapshotId']} contains {expected[0]} chunks and {expected[1]} bytes", "Script output is not expected")
-        self.assertEqual(output[1], f"['{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/output']")
+        self.assertEqual(output[1], f"['{self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}']")
         
     def tearDown(self):
         super(CanaryDownloadSnapshots, self).tearDown()

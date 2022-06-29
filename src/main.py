@@ -158,12 +158,14 @@ def arg_parse():
     list_parser = subparsers.add_parser('list', help='Returns accurate size of a Snapshot by enumerating actual consumed space')
     diff_parser = subparsers.add_parser('diff', help='Returns accurate size of a Snapshot Delta by enumerating the incremental difference between 2 snapshots with a common parent')
     download_parser = subparsers.add_parser('download', help='Transfers an EBS Snapshot to an arbitrary file or block device')
+    deltadownload_parser = subparsers.add_parser('deltadownload', help='Downloads the delta between any two snapshots with a common parent')
     upload_parser = subparsers.add_parser('upload', help='Transfers an arbitrary file or block device to a new EBS Snapshot')
     copy_parser = subparsers.add_parser('copy', help='Transfers an EBS Snapshot to another EBS Direct API Endpoint (intended use case: copy Snapshots across accounts and/or regions)')
     sync_parser = subparsers.add_parser('sync', help='Synchronizes the incremental difference between 2 Snapshots, delta(A,B) to Snapshot C (clone of A), resulting in Snapshot D (clone of B)')
     movetos3_parser = subparsers.add_parser('movetos3', help='Transfers an EBS Snapshot to a customer-owned S3 Bucket (any S3 Storage Class) with zstandard compression, tuneable object size and an independent segment checksum')
     getfroms3_parser = subparsers.add_parser('getfroms3', help='Transfers a Snapshot stored in a customer-owned S3 Bucket to a new EBS snapshot')
-    multiclone_parser = subparsers.add_parser('multiclone', help=' Same functionality as “download”, but writing to multiple destinations in parallel')
+    multiclone_parser = subparsers.add_parser('multiclone', help='Same functionality as “download”, but writing to multiple destinations in parallel')
+    fanout_parser = subparsers.add_parser('fanout', help='Upload from file to multiple snapshot(s), provided a list of regions')
     
     # add CLI argument options for each command
     list_parser.add_argument('snapshot', help='Snapshot ID to list size of')
@@ -173,6 +175,10 @@ def arg_parse():
     
     download_parser.add_argument('snapshot', help='Snapshot ID to download')
     download_parser.add_argument('file_path', help='File path of download location. (Absolute path preferred)')
+
+    deltadownload_parser.add_argument('snapshot_one', help='First snapshot ID to used in comparison')
+    deltadownload_parser.add_argument('snapshot_two', help='Second snapshot ID to used in comparison')
+    deltadownload_parser.add_argument('file_path', help='File path of download location. (Absolute path preferred)')
     
     upload_parser.add_argument('file_path', help='File path of file or raw device to upload as snapshot')
     
@@ -196,8 +202,10 @@ def arg_parse():
     getfroms3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
     
     multiclone_parser.add_argument('snapshot', help='Snapshot ID to multiclone')
-    multiclone_parser.add_argument('file_path', help='File path to file containing list of multiclone destinations')
-    multiclone_parser.add_argument('-a', '--availability_zone', default=None, help='Availability Zone (AZ) to complete multiclone operation within')
+    multiclone_parser.add_argument('file_path', help='File path to a .txt file containing list of multiclone destinations')
+
+    fanout_parser.add_argument('devise_path', help='File path to raw device for fanout snapshot distributution')
+    fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution')
     
     args = parser.parse_args()
     
@@ -276,7 +284,9 @@ def arg_parse():
     aws_regions_list = json.loads(bash_get_aws_regions.stdout)['Regions']
     origin_is_valid = False
     destination_is_valid = False
+    region_set = set()
     for region in aws_regions_list:
+        region_set.add(region['RegionName'])
         if region['RegionName'] == aws_origin_region:
             origin_is_valid = True
         if region['RegionName'] == aws_destination_region:
@@ -284,7 +294,22 @@ def arg_parse():
     if not (origin_is_valid==True and destination_is_valid==True):
         print("Invalid AWS region name(s) were provided")
         return None
-    
+
+    #Validate fanout regions
+    aws_regions_fanout = []
+    if args.command == 'fanout':
+        f = open(args.destinations, 'r')
+        for region in f:
+            region = region.strip()
+            if region == "":
+                continue
+            if region in region_set:
+                aws_regions_fanout.append(region)
+            else:
+                print("Invalid AWS region name:", region)
+                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+    args.destinations = aws_regions_fanout
 
     #Configure Global Vars
     singleton.init()
@@ -300,7 +325,7 @@ def arg_parse():
     singleton.DRY_RUN = dry_run
 
     return args
-    
+
 if __name__ == "__main__":
     if check_dependencies(prompt_install=True) == False:
         print("Missing and required dependencies. \nExiting")
@@ -312,7 +337,7 @@ if __name__ == "__main__":
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
 
     #Placing these imports earlier creates a circular dependency with the installer
-    from fsp import list, diff, download, upload, copy, sync, movetos3, getfroms3, multiclone, fanout
+    from fsp import list, diff, download, deltadownload, upload, copy, sync, movetos3, getfroms3, multiclone, fanout
 
     command = args.command
     if command == "list":
@@ -323,7 +348,10 @@ if __name__ == "__main__":
         
     elif command == "download":
         download(snapshot_id=args.snapshot, file_path=args.file_path)
-        
+
+    elif command == "deltadownload":
+        deltadownload(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two, file_path=args.file_path)
+
     elif command == "upload":
         upload(file_path=args.file_path)
         
@@ -343,7 +371,7 @@ if __name__ == "__main__":
         multiclone(snapshot_id=args.snapshot, infile=args.file_path)
         
     elif command == "fanout":
-        fanout()
+        fanout(devise_path=args.devise_path, destination_regions=args.destinations)
     else:
         print("Unknown command: %s" % command)
         sys.exit(127) # Exit code for command not found. Script cannot run
