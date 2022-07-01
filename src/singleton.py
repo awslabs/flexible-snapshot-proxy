@@ -1,5 +1,4 @@
-#Singleton module to store project scoped global variables
-
+#Singleton module to store project scoped global variables - Should only be initialized in main.py the imported to any other module in src/
 
 def init():
     global AWS_ACCOUNT_ID # Account ID of the user. Retrieved using boto3 which reads AWS CLI config

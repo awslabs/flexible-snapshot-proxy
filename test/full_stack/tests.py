@@ -1,5 +1,4 @@
 import json
-from mailbox import linesep
 import unittest
 import os
 import boto3

@@ -38,14 +38,18 @@ def version_cmp(v1, v2):
          return -1
     return 0
 
-def install_dependencies(upgrade_list, install_list):
+def install_dependencies(install_list, required_dependencies):
     if len(install_list) > 0:
         print("\n\nThe Following Packages Need To Be Installed To Run Flexible Snapshot Proxy")
         for package in install_list:
+            version = required_dependencies[package][1]
             try:
                 approval = input(f"pip3 install {package}? (Y/n): ")
                 if approval == "Y" or approval == "y" or approval == "":
-                    subprocess.run(["pip3", "install", package])
+                    if version != None:
+                        subprocess.run(["pip3", "install", f"{package}==version"])
+                    else:
+                        subprocess.run(["pip3", "install", package])
                 elif approval == "N" or approval == "n":
                     return #Main will reject script for invalid dependencies
                 else:
@@ -53,49 +57,19 @@ def install_dependencies(upgrade_list, install_list):
                     sys.exit(1)
             except Exception as e:
                 print("System Error\n", e)
-                return 
-
-    if len(upgrade_list) > 0:
-        print("\n\nThe Following Packages Need To Be Updated To Run Flexible Snapshot Proxy")
-        for package in upgrade_list:
-            try:
-                approval = input(f"pip3 install -U {package}? (Y/n): ")
-                if approval == "Y" or approval == "y" or approval == "":
-                    subprocess.run(["pip3", "install", "-U", package])
-                elif approval == "N" or approval == "n":
-                    return #Main will reject script for invalid dependencies
-                else:
-                    print("Unrecognized input. Aborting...")
-                    sys.exit(1)
-            except Exception as e:
-                print("System Error\n", e)
-                return 
+                return
 
 
 def check_dependencies(prompt_install=False):
-    dependency_file = os.path.dirname(os.path.realpath(__file__)) + '/../dependency.txt'
+    dependency_file = 'dependencies.json'
     required_dependencies = {}
-    try:
-        with open(dependency_file) as f:
-            lines = f.readlines()
-
-            for line in lines:
-                split = line.split('==')
-                package = split[0].strip()
-                version = split[-1].strip()
-
-                required_dependencies[package] = version
-            
-    except FileNotFound as e:
-        print(f"The file {dependency_file} was not found in path", file=sys.stderr)
-        print(e, file=sys.stderr)
-        return False
-
-    except Exception as e:
-        print(f"The file '{dependency_file}' is not formatted correctly.", file=sys.stderr)
-        print("All lines should be of the form: <package>==<version>", file=sys.stderr)
-        print("System Error\n", e, file=sys.stderr)
-        return False
+    f = open(dependency_file)
+    objects = json.load(f)['dependencies'] # List of objects key is module name. value is dictionary with min and max supported versions
+    for i in range(len(objects)):
+        name = objects[i]['package_name']
+        max_version = objects[i]['max']
+        min_version = objects[i]['min']
+        required_dependencies[name] = (min_version, max_version)
 
     cur_dependencies = {}
     try:
@@ -119,23 +93,25 @@ def check_dependencies(prompt_install=False):
         print(e, file=sys.stderr)
         return False
 
-    upgrade_list = []
     install_list = []
     for dependency in required_dependencies:
-        version = required_dependencies[dependency]
+        min_version = required_dependencies[dependency][0]
+        max_version = required_dependencies[dependency][1]
         if dependency in cur_dependencies:
             #Exists, check version
-            if version_cmp(version, cur_dependencies[dependency]) < 0:
-                upgrade_list.append(dependency)
+            if min_version != None and version_cmp(version, min_version) < 0:
+                install_list.append(dependency)
+            elif max_version != None and version_cmp(version, max_version) > 0:
+                install_list.append(dependency)
         else:
             #Doesn't exist. Needs installation
             install_list.append(dependency)
 
-    if len(upgrade_list) == 0 and len(install_list) == 0:
+    if len(install_list) == 0:
         return True
     else:
         if prompt_install==True:
-            install_dependencies(upgrade_list, install_list)
+            install_dependencies(install_list, required_dependencies)
             return check_dependencies() #If installation has occurred, check once more then pass or fail
         else: 
             return False
@@ -331,7 +307,7 @@ if __name__ == "__main__":
     if check_dependencies(prompt_install=True) == False:
         print("Missing and required dependencies. \nExiting")
         sys.exit(126) # Exit code for missing dependencies. Script cannot run
-    
+
     args = arg_parse()
     if args == None:
         print("\nExiting")

@@ -1,0 +1,10 @@
+{
+    "dependencies": [
+        {"package_name": "boto3", "min": null, "max": null},
+        {"package_name":"botocore", "min": null, "max": null},
+        { "package_name": "joblib", "min": null, "max": null},
+        { "package_name": "numpy", "min": null, "max": null},
+        { "package_name":"urllib3", "min": null, "max": null},
+        { "package_name": "zstandard", "min": null, "max": null}
+    ]
+}
