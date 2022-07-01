@@ -229,6 +229,7 @@ def arg_parse():
         with open("temp.txt") as f:
             lines = f.readlines()
             user_canonical_id = lines[-1].strip()
+        os.remove("temp.txt")
     else:
         print("Can not get user account CANONICAL ID. Is your AWS CLI Configured?")
         return None

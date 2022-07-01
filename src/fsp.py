@@ -24,6 +24,7 @@
 # c6gn.16xlarge: 466 MB/s     - max tested       $2.760/hr. (Sep 2021)
 
 
+import json
 import boto3
 import botocore.exceptions as aws_exceptions
 import hashlib
@@ -567,8 +568,12 @@ def fanout(devise_path, destination_regions):
         with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
             parallel(delayed(put_segments_fanout)(array, devise_path, f, ebsclient_snaps) for array in split)
         
+        output = {}
         for region in ebsclient_snaps:
             ebs = ebsclient_snaps[region]['client']
             snapshot_id = ebsclient_snaps[region]['snapshot']['SnapshotId']
             count = ebsclient_snaps[region]['count']
             ebs.complete_snapshot(SnapshotId=snapshot_id, ChangedBlocksCount=count.value())
+            output[region] = snapshot_id
+        
+        print(json.dumps(output)) #record all regions and their snapshots in a key-value pair format for easy log tail

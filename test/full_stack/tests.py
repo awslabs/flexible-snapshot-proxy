@@ -1,3 +1,5 @@
+import json
+from mailbox import linesep
 import unittest
 import os
 import boto3
@@ -317,6 +319,50 @@ class CanaryDownloadSnapshots(unittest.TestCase):
             rmtree(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
         except OSError as e:
             print("Error: %s : %s" % (self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'], e.strerror))
+
+class CanaryDeltadownloadSnapshots(unittest.TestCase):
+    
+    TEST_PARAMETERS = {}
+    
+    def setUp(self):
+        super(CanaryDeltadownloadSnapshots, self).setUp()
+        
+        testing_configurations = read_configuration_file()
+        
+        self.TEST_PARAMETERS['snapshot1'] = testing_configurations['small-volume-snapshots']['full']
+        self.TEST_PARAMETERS['snapshot2'] = testing_configurations['small-volume-snapshots']['half']
+        self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY']
+        self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY'] + PATH_TO_FULL_STACK_TESTING + '/temp'
+        self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE'] = testing_configurations['small-volume-path']
+        
+        os.mkdir(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
+        
+    def small_test_deltadownload(self):
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py deltadownload {self.TEST_PARAMETERS['snapshot1']} {self.TEST_PARAMETERS['snapshot2']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
+        
+        print(f"Running Script: {command}")
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
+  
+        output = ['','','']
+        with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
+            lines = f.readlines()
+            output[0] = lines[0].strip()
+            output[1] = lines[1].strip()
+            
+        output[0] = output[0].split(',')[0] #Remove the time reporting
+        
+        expected = compute_size_of_diff(self.TEST_PARAMETERS['snapshot1'], self.TEST_PARAMETERS['snapshot2'])
+
+        self.assertEqual(output[0], f"Changes between {self.TEST_PARAMETERS['snapshot1']} and {self.TEST_PARAMETERS['snapshot2']} contain {expected[0]} chunks and {expected[1]} bytes", "Script output is not expected")
+        self.assertEqual(output[1], f"['{self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}']")
+        
+    def tearDown(self):
+        super(CanaryDeltadownloadSnapshots, self).tearDown()
+        
+        try:
+            rmtree(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
+        except OSError as e:
+            print("Error: %s : %s" % (self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'], e.strerror))
             
 class CanaryUploadSnapshots(unittest.TestCase):
     
@@ -551,7 +597,7 @@ class CanarySyncSnapshots(unittest.TestCase):
         except Exception as e:
             print("AWS Error Message\n", e)
             
-        self.assertIsNotNone(response, "No Response!")
+        self.assertIsNotNone(response, f"No Response! Checking Snapshot {self.CLASS_SCOPE_VARS['new_snapshotId']} failed.")
         self.assertTrue((response['Snapshots'][0]['State'] == 'completed' or response['Snapshots'][0]['State'] == 'pending'), "Sync had an error!")
         
         
@@ -617,6 +663,110 @@ class CanaryMultiCloneSnapshot(unittest.TestCase):
         except OSError as e:
             print("Error: %s : %s" % (self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'], e.strerror))
 
+class CanaryFanoutSnapshots(unittest.TestCase):
+    
+    TEST_PARAMETERS = {}
+    CLASS_SCOPE_VARS = {}
+    
+    def setUp(self):
+        super(CanaryFanoutSnapshots, self).setUp()
+        
+        testing_configurations = read_configuration_file()
+        
+        self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY']
+        self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY'] + PATH_TO_FULL_STACK_TESTING + '/temp'
+        self.TEST_PARAMETERS['UPLOAD_BLOCKS'] = testing_configurations['small-volume-path']
+        self.TEST_PARAMETERS['MAX_RETRY'] = testing_configurations['max-retry-count']
+        self.TEST_PARAMETERS['RETRY_BACKOFF'] = testing_configurations['default-retry-time']
+        self.TEST_PARAMETERS['REGIONS_FILE'] = "regions.txt"
+        regions = []
+        lines = open(f"{self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/test/full_stack/{self.TEST_PARAMETERS['REGIONS_FILE']}", 'r')
+        for line in lines:
+            regions.append(line.strip())
+        self.CLASS_SCOPE_VARS['REGION_LIST'] = regions
+        
+        os.mkdir(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
+        
+    def compute_expected_output(self):
+        CHUNK_SIZE = 1024 * 512
+        MEGABYTE = 1024 * 1024
+        GIGABYTE = MEGABYTE * 1024
+    
+        #Taken from original script. Purpose of this test this that expected behavior is still matched after refactoring
+        try:
+            with os.fdopen(os.open(self.TEST_PARAMETERS['UPLOAD_BLOCKS'], os.O_RDWR | os.O_CREAT), 'rb+') as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                gbsize = math.ceil(size / GIGABYTE)
+                chunks = size // CHUNK_SIZE
+                return [size, chunks, gbsize]
+        except Exception as e:
+            print("OS Error Message\n",e)
+
+        
+    def small_test_fanout(self):
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py fanout {self.TEST_PARAMETERS['UPLOAD_BLOCKS']} {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/test/full_stack/{self.TEST_PARAMETERS['REGIONS_FILE']}"
+        
+        print(f"Running Script: {command}")
+        self.assertEqual(os.system(f"{command} > {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt"), 0, "src/main.py exited with FAILURE status code") #Ensure the script ran successfully
+  
+        output = ['','','']
+        with open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/temp.txt") as f:
+            lines = f.readlines()
+            output[0] = lines[0].strip()
+            output[1] = lines[1].strip()
+            output[2] = lines[2].strip()
+        
+        expected = self.compute_expected_output()
+
+        self.assertEqual(output[0], f"Size of file is {expected[0]} bytes and {expected[1]} chunks. Aligning snapshot to {expected[2]} GiB boundary.", "Script output is not expected")
+        self.assertEqual(output[1], f"Spawned {len(self.CLASS_SCOPE_VARS['REGION_LIST'])} EBS Clients and started a snapshot in each region.", "Script output is not expected")
+
+        # check snapshots available logic
+        region_to_snapid_map = json.loads(output[2])
+        self.CLASS_SCOPE_VARS['REGION_MAP'] = region_to_snapid_map
+
+        for region in region_to_snapid_map:
+            snap_id = region_to_snapid_map[region]
+
+            #check that new snapshot exists
+            response = None
+            retry = 0
+            while response is None and retry < self.TEST_PARAMETERS['MAX_RETRY']:
+                try:
+                    ec2 = boto3.client('ec2', region_name=region)
+                    response = ec2.describe_snapshots(
+                        SnapshotIds=[snap_id],
+                        DryRun=False
+                    )
+                except Exception as e:
+                    print("AWS Error Message\n", e)
+                    sleep(self.TEST_PARAMETERS['RETRY_BACKOFF'])
+                finally:
+                    retry += 1
+                
+            self.assertIsNotNone(response, f"No Response! Checking Snapshot {snap_id} failed.")
+            self.assertTrue((response['Snapshots'][0]['State'] == 'completed' or response['Snapshots'][0]['State'] == 'pending'), f"fanout had an error for snapshot {snap_id} in {region}.")
+        
+    def tearDown(self):
+        super(CanaryFanoutSnapshots, self).tearDown()
+        try:
+            rmtree(self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'])
+        except OSError as e:
+            print("Error: %s : %s" % (self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY'], e.strerror))
+        
+        
+        for region in self.CLASS_SCOPE_VARS['REGION_MAP']:
+            snap_id = self.CLASS_SCOPE_VARS['REGION_MAP'][region]
+
+            try:
+                ec2 = boto3.client('ec2', region_name=region)
+                ec2.delete_snapshot(
+                SnapshotId=snap_id,
+                DryRun=False
+            )
+            except Exception as e:
+                print("AWS Error Message\n", e)
 class CanaryS3Snapshot(unittest.TestCase):
     
     TEST_PARAMETERS = {}
@@ -734,19 +884,21 @@ def WorkflowSuite():
     suite.addTest(WorkflowMoveToS3RestoreFromS3('test_move_to_s3_and_get_from_s3'))
     return suite
             
-def CLISuite():
+def SmallCanarySuite():
     suite = unittest.TestSuite()
     suite.addTest(CanaryListSnapshot('small_test_list'))
     suite.addTest(CanaryDownloadSnapshots('small_test_download'))
+    suite.addTest(CanaryDeltadownloadSnapshots('small_test_deltadownload'))
     suite.addTest(CanaryUploadSnapshots('small_test_upload'))
     suite.addTest(CanaryCopySnapshot('small_test_copy'))
     suite.addTest(CanaryDiffSnapshots('small_test_diff'))
     suite.addTest(CanarySyncSnapshots('small_test_sync'))
     suite.addTest(CanaryMultiCloneSnapshot('small_test_multiclone'))
+    suite.addTest(CanaryFanoutSnapshots('small_test_fanout'))
     suite.addTest(CanaryS3Snapshot('small_test_movetos3'))
     suite.addTest(CanaryS3Snapshot('small_test_getfroms3'))
     return suite
     
 if __name__ == '__main__':
     runner = unittest.TextTestRunner()
-    runner.run(CLISuite())
+    runner.run(SmallCanarySuite())
