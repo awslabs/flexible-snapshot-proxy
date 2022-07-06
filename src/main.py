@@ -1,120 +1,45 @@
+"""
+  Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+  
+  Licensed under the Apache License, Version 2.0 (the "License").
+  You may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+  
+      http://www.apache.org/licenses/LICENSE-2.0
+  
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+"""
+
 import argparse
 import os.path
 import subprocess
 import sys
-import json
 
 import singleton #Project Scoped Global Vars
 
 '''
-Implemented like Java str compare.
-if v1 > v2 |-> return > 0
-if v1 == v2 |-> return == 0
-if v1 < v2 |-> return < 0
+TO CONTROL PACKAGE VERSIONS. EACH LINE IN ../requirements.txt CAN TAKE ON ONE OF THE FOLLOWING FORMS:
+
+Requirement	    Description
+foo	            any version of foo
+foo>=5	        any version of foo, above or equal to 5
+foo>=5.6	    any version of foo, above or equal to 5.6
+foo==5.6.1	    exact match
+foo>5	        foo-5 or greater, including minor and patch
+foo>5,<5.7	    foo-5 or greater, but less than foo-5.7
+foo>0,<5.7	    any foo version less than foo-5.7
 '''
-def version_cmp(v1, v2):
-
-    arr1 = v1.split(".")
-    arr2 = v2.split(".")
-    n = len(arr1)
-    m = len(arr2)
-     
-    arr1 = [int(i) for i in arr1]
-    arr2 = [int(i) for i in arr2]
-  
-    if n>m:
-      for i in range(m, n):
-         arr2.append(0)
-    elif m>n:
-      for i in range(n, m):
-         arr1.append(0)
-     
-    # returns 1 if version 1 is bigger and -1 if
-    # version 2 is bigger and 0 if equal
-    for i in range(len(arr1)):
-      if arr1[i]>arr2[i]:
-         return 1
-      elif arr2[i]>arr1[i]:
-         return -1
-    return 0
-
-def install_dependencies(install_list, required_dependencies):
-    if len(install_list) > 0:
-        print("\n\nThe Following Packages Need To Be Installed To Run Flexible Snapshot Proxy")
-        for package in install_list:
-            version = required_dependencies[package][1]
-            try:
-                approval = input(f"pip3 install {package}? (Y/n): ")
-                if approval == "Y" or approval == "y" or approval == "":
-                    if version != None:
-                        subprocess.run(["pip3", "install", f"{package}==version"])
-                    else:
-                        subprocess.run(["pip3", "install", package])
-                elif approval == "N" or approval == "n":
-                    return #Main will reject script for invalid dependencies
-                else:
-                    print("Unrecognized input. Aborting...")
-                    sys.exit(1)
-            except Exception as e:
-                print("System Error\n", e)
-                return
-
-
-def check_dependencies(prompt_install=False):
-    dependency_file = 'dependencies.json'
-    required_dependencies = {}
-    f = open(dependency_file)
-    objects = json.load(f)['dependencies'] # List of objects key is module name. value is dictionary with min and max supported versions
-    for i in range(len(objects)):
-        name = objects[i]['package_name']
-        max_version = objects[i]['max']
-        min_version = objects[i]['min']
-        required_dependencies[name] = (min_version, max_version)
-
-    cur_dependencies = {}
-    try:
-        output = (subprocess.run(["pip3", "freeze"], capture_output=True).stdout).decode('utf-8')
-        lines = output.split("\n")
-    
-        for line in lines:
-            line = str(line)
-            split = line.split('==')
-            package = split[0].strip()
-            version = split[-1].strip()
-            if len(package) == 0 or len(version) == 0:
-                continue
-
-            cur_dependencies[package] = version
-
-    except subprocess.CalledProcessError as e:
-        print(e.output, file=sys.stderr)
+def install_dependencies():
+    install_command = subprocess.run(['pip3', 'install', '-r', f'{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt'], capture_output=True)
+    if install_command.returncode != 0:
+        print("Dependencies \U0000274C", "stdout: " + install_command.stdout.decode('ascii'), "stderr: " + install_command.stderr.decode('ascii'), sep='\n') # unicode for RED X
         return False
-    except Exception as e:
-        print(e, file=sys.stderr)
-        return False
-
-    install_list = []
-    for dependency in required_dependencies:
-        min_version = required_dependencies[dependency][0]
-        max_version = required_dependencies[dependency][1]
-        if dependency in cur_dependencies:
-            #Exists, check version
-            if min_version != None and version_cmp(version, min_version) < 0:
-                install_list.append(dependency)
-            elif max_version != None and version_cmp(version, max_version) > 0:
-                install_list.append(dependency)
-        else:
-            #Doesn't exist. Needs installation
-            install_list.append(dependency)
-
-    if len(install_list) == 0:
-        return True
     else:
-        if prompt_install==True:
-            install_dependencies(install_list, required_dependencies)
-            return check_dependencies() #If installation has occurred, check once more then pass or fail
-        else: 
-            return False
+        return True
 
 '''
 Creates parsers and enforces valid global parameter choices. Returns None if FSP should abort
@@ -181,7 +106,7 @@ def arg_parse():
     multiclone_parser.add_argument('file_path', help='File path to a .txt file containing list of multiclone destinations')
 
     fanout_parser.add_argument('devise_path', help='File path to raw device for fanout snapshot distributution')
-    fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution')
+    fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution on separate lines')
     
     args = parser.parse_args()
     
@@ -196,19 +121,19 @@ def arg_parse():
         user_account = sts.get_caller_identity().get('Account')
         user_id = sts.get_caller_identity().get('UserId')
     except sts.exceptions as e:
-        print("Can not get user account. Is your AWS CLI Configured?")
+        print("Can not get AWS user account. Is your AWS CLI Configured?")
+        print("Try running: aws configure")
         print(e)
         return None
 
     user_canonical_id = ''
-    if os.system("aws s3api list-buckets --query Owner.ID --output text > temp.txt") == 0:
-        with open("temp.txt") as f:
-            lines = f.readlines()
-            user_canonical_id = lines[-1].strip()
-        os.remove("temp.txt")
-    else:
-        print("Can not get user account CANONICAL ID. Is your AWS CLI Configured?")
-        return None
+    try:
+        s3 = boto3.client('s3')
+        user_canonical_id = s3.list_buckets()['Owner']['ID']
+    except s3.exceptions as e:
+            print("Error: Could not get canonical user id")
+            print(e)
+            return None
 
 
     #Find aws regions
@@ -254,19 +179,26 @@ def arg_parse():
     dry_run = args.dry_run
 
     # Validation of aws regions.
-    bash_get_aws_regions = subprocess.run(["aws", "ec2", "describe-regions", "--all-regions"], capture_output=True)
-    if bash_get_aws_regions.returncode != 0:
-        print("Can not retrieve AWS regions from AWS CLI")
+    aws_regions_list = []
+    try:
+        ec2 = boto3.client('ec2')
+        rsp = ec2.describe_regions()["Regions"]
+        for region in rsp:
+            aws_regions_list.append(region["RegionName"])
+    except Exception as e:
+        print("Error attempting to validate AWS regions: %s" % e)
         return None
-    aws_regions_list = json.loads(bash_get_aws_regions.stdout)['Regions']
+    if len(aws_regions_list) == 0:
+        return None
+    
     origin_is_valid = False
     destination_is_valid = False
     region_set = set()
     for region in aws_regions_list:
-        region_set.add(region['RegionName'])
-        if region['RegionName'] == aws_origin_region:
+        region_set.add(region)
+        if region == aws_origin_region:
             origin_is_valid = True
-        if region['RegionName'] == aws_destination_region:
+        if region == aws_destination_region:
             destination_is_valid = True
     if not (origin_is_valid==True and destination_is_valid==True):
         print("Invalid AWS region name(s) were provided")
@@ -283,7 +215,7 @@ def arg_parse():
             if region in region_set:
                 aws_regions_fanout.append(region)
             else:
-                print("Invalid AWS region name:", region)
+                print("Fanout - invalid AWS region name:", region)
                 sys.exit(1) # Exit code for invalid parameters. Script cannot run
 
     args.destinations = aws_regions_fanout
@@ -304,9 +236,9 @@ def arg_parse():
     return args
 
 if __name__ == "__main__":
-    if check_dependencies(prompt_install=True) == False:
-        print("Missing and required dependencies. \nExiting")
+    if install_dependencies() == False:
         sys.exit(126) # Exit code for missing dependencies. Script cannot run
+    print("Dependencies \U00002705") # unicode for GREEN CHECK
 
     args = arg_parse()
     if args == None:

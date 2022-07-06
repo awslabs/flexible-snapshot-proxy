@@ -1,5 +1,0 @@
-{
-    "dependencies": [
-        {"package_name": "boto3", "min": null, "max": null}
-    ]
-}
