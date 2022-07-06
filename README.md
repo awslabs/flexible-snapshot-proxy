@@ -1,24 +1,35 @@
-# ebs-playground
-Playground for EBS Direct API experiments
+# Flexible Snapshot Proxy
 
-Pre-requisite install:
+High-performance open-source orchestration utility that utilizes EBS Direct APIs to efficiently clone, copy and migrate EBS snapshots to and from arbitrary File, Block or Object destinations.
 
-```
-pip3 install boto3 numpy joblib zstandard
-```
+## Basic Usage
 
-Usage examples:
+todo: Outline the power of what can be accomplished with this tool 
+## Installation
 
-To enumerate all deltas for a volume, do something like this: 
- 
-```
-for i in `aws ec2 describe-snapshots --filters Name=volume-id,Values=vol-0ec92ac29f94ddcd2 | grep SnapshotId | cut -d "\"" -f 4 `; do python3 ebs.py diff $old $i; old=$i; done | awk '{chunks+=$7; size+=$10} END{printf "Snapshot deltas contain %s chunks and %s bytes\n", chunks, size;}';
-```
+todo: Implement by getting package into PyPI
 
-System requirements:
+## Configuration
+
+todo: implement with a cli option for a setup.py script 
+## Features
+
+todo: Describe everything that can be done with this tool
+
+## Design Overview
+
+todo: Outline the design choices of high parallelization and sharing memory completing the same job in different regions (e.g. multiclone and fanout)
+## System requirements
 
 [Memory](Memory.md)
 
-[CPU](ebs.py#L7)
+[CPU](src/fsp.py#L7)
 
-[Network](ebs.py#L8)
+[Network](src/fsp.py#L8)
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+
+## License
+
+This project is licensed under the Apache-2.0 License.
