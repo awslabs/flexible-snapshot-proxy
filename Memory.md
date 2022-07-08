@@ -1,8 +1,8 @@
-The memory utilization of ebs.py depends on several factors - type of command, size of instance, and size of snapshot/volume. It is designed to auto-scale the concurrency based on available resources and spread the workload across many child processes and threads, with each child typically consuming a fixed amount of memory for large data movement operations.
+The memory utilization of flexible-snapshot-proxy depends on several factors - type of command, size of instance, and size of snapshot/volume. It is designed to auto-scale the concurrency based on available resources and spread the workload across many child processes and threads, with each child typically consuming a fixed amount of memory for large data movement operations.
 
 This is a breakdown of operations by type, and profiled requirements for each type.
 
-The first step in all commands that read from the EBS Direct API - today, that is every command except "getfroms3" and "upload" - is building an index of all snapshot blocks that ebs.py will be operating on. We build this index using ListSnapshotBlocks (single snapshot, used for list/copy/download type operations) or ListChangedBlocks (delta between two snapshots of the same lineage, used for diff, sync type operations) API calls.
+The first step in all commands that read from the EBS Direct API - today, that is every command except "getfroms3" and "upload" - is building an index of all snapshot blocks that flexible-snapshot-proxy will be operating on. We build this index using ListSnapshotBlocks (single snapshot, used for list/copy/download type operations) or ListChangedBlocks (delta between two snapshots of the same lineage, used for diff, sync type operations) API calls.
 
 The index contains metadata about all allocated blocks in the snapshot, and the overall memory requirement for the index is approximately 420 bytes per block. The actual entry size is 268 bytes per block, but there is overhead in maintaining a dictionary and related objects. The measured values below show **real** memory utilization of the entire script for "list"/"diff", including the index and all overhead.
 
@@ -18,7 +18,7 @@ Building the index is a single-threaded operation. An example of memory utilizat
 
 <img width="837" alt="Memory used for listing an 8TiB snapshot" src="https://user-images.githubusercontent.com/1688932/166822175-a940860a-7b68-460a-8bf8-231e6f191c21.png">
 
-In practical terms, considering the recommendations outlined in the ebs.py comment block and typical system memory amounts, a system with 8GB of memory should be able to list a 10 TiB allocated snapshot, and 16 GiB of memory is optimal for listing 16 TiB snapshots. This part scales linearly, so to handle a 64TiB allocated snapshot from an io2 Block Express volume (64 TiB is the maximum volume size supported today), you will need over 48 GiB of memory, and therefore should use a system with 64 GiB or more.
+In practical terms, considering the recommendations outlined in the flexible-snapshot-proxy comment block and typical system memory amounts, a system with 8GB of memory should be able to list a 10 TiB allocated snapshot, and 16 GiB of memory is optimal for listing 16 TiB snapshots. This part scales linearly, so to handle a 64TiB allocated snapshot from an io2 Block Express volume (64 TiB is the maximum volume size supported today), you will need over 48 GiB of memory, and therefore should use a system with 64 GiB or more.
 
 Once the list/diff is complete, additional memory is needed to perform further operations on the snapshots. 
 
