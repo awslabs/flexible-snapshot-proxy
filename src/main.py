@@ -44,9 +44,9 @@ def install_dependencies():
 '''
 Creates parsers and enforces valid global parameter choices. Returns None if FSP should abort
 '''
-def arg_parse():
+def arg_parse(args):
     # Highest level parser
-    parser = argparse.ArgumentParser(description='EBS DirectAPI Client.')
+    parser = argparse.ArgumentParser(description='Flexible Snapshot Proxy (FSP) CLI.')
     parser.add_argument("-o", "--origin_region", default=None, help="AWS Origin Region. Where snapshots will be found from. (default: .aws/config then us-east-1)")
     parser.add_argument("-d", "--dry_run", default=False, action="store_true", help="Preform a dry run of FSP operation to check valid AWS permissions. (default: false)")
     parser.add_argument("-q", "--quiet", default=False, action="store_true", dest="q", help="quiet output")
@@ -108,7 +108,7 @@ def arg_parse():
     fanout_parser.add_argument('devise_path', help='File path to raw device for fanout snapshot distributution')
     fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution on separate lines')
     
-    args = parser.parse_args()
+    args = parser.parse_args(args)
     
     '''
     Setup Global Variables
@@ -240,7 +240,7 @@ if __name__ == "__main__":
         sys.exit(126) # Exit code for missing dependencies. Script cannot run
     print("Dependencies \U00002705") # unicode for GREEN CHECK
 
-    args = arg_parse()
+    args = arg_parse(sys.argv[1:])
     if args == None:
         print("\nExiting")
         sys.exit(1) # Exit code for invalid parameters. Script cannot run

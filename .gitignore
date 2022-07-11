@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+#Testing config files are personal
+test/config.yaml
+
 # C extensions
 *.so
 
