@@ -149,7 +149,7 @@ def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
 
 def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
     block = int(block)
-    with os.fdopen(os.open(OUTFILE, os.O_RDWR | os.O_CREAT), 'rb+') as f:
+    with os.fdopen(os.open(OUTFILE, os.O_RDONLY | os.O_NONBLOCK), 'rb+') as f:
         f.seek((block) * CHUNK_SIZE)
         data = f.read(CHUNK_SIZE)
         if not data:
@@ -160,7 +160,7 @@ def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
 
 def put_block_from_file_fanout(block, source, f, ebsclient_snaps):
     block = int(block)
-    with os.fdopen(os.open(source, os.O_RDWR | os.O_CREAT), 'rb+') as f:
+    with os.fdopen(os.open(source, os.O_RDONLY | os.O_NONBLOCK), 'rb+') as f:
         f.seek((block) * CHUNK_SIZE)
         data = f.read(CHUNK_SIZE)
         if not data:
@@ -237,7 +237,15 @@ def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_WRONLY), 'rb+') # On Windows, we can write to raw disk but not read or create, so O_WRONLY is the only way.
+            os.fdopen(os.open(file, os.O_WRONLY), 'rb+') 
+        except io.UnsupportedOperation:
+            print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
+            raise SystemExit
+
+def validate_file_paths_read(files):
+    for file in files:
+        try:
+            os.fdopen(os.open(file, os.O_RDONLY), 'rb+') 
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
@@ -425,13 +433,13 @@ def deltadownload(snapshot_id_one, snapshot_id_two, file_path):
 def upload(file_path):
     files = []
     files.append(file_path)
-    validate_file_paths(files)
+    validate_file_paths_read(files)
 
 
     start_time = time.perf_counter()
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION)
     
-    with os.fdopen(os.open(file_path, os.O_RDWR | os.O_CREAT), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
+    with os.fdopen(os.open(file_path, os.O_RDONLY | os.O_NONBLOCK), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
         f.seek(0, os.SEEK_END)
         size = f.tell()
         gbsize = math.ceil(size / GIGABYTE)
@@ -562,13 +570,13 @@ def multiclone(snapshot_id, infile):
 def fanout(device_path, destination_regions):
     files = []
     files.append(device_path)
-    validate_file_paths(files)
+    validate_file_paths_read(files)
     #Note destination_regions was validated while singleton was being configured (Near origin and destination regions validation)
 
     ebs_clients = {}
     snaps = {}
     ebsclient_snaps = {}
-    with os.fdopen(os.open(device_path, os.O_RDWR | os.O_CREAT), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
+    with os.fdopen(os.open(device_path, os.O_RDONLY | os.O_NONBLOCK), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
         f.seek(0, os.SEEK_END)
         size = f.tell()
         gbsize = math.ceil(size / GIGABYTE)
