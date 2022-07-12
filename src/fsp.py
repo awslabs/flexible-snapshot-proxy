@@ -438,7 +438,7 @@ def upload(file_path):
         chunks = size // CHUNK_SIZE
         split = np.array_split(range(chunks), singleton.NUM_JOBS)
         count = Counter(Manager(), 0)
-        print("Size of file is", size, "bytes and", chunks, "chunks")
+        print("Size of", file_path, "is", size, "bytes and", chunks, "chunks")
         snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+file_path)
         with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
             parallel(delayed(put_blocks)(array, snap['SnapshotId'], file_path, count) for array in split)
@@ -559,29 +559,29 @@ def multiclone(snapshot_id, infile):
         parallel(delayed(get_blocks)(array, files, snapshot_id) for array in split)
     print ('multiclone took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
 
-def fanout(devise_path, destination_regions):
+def fanout(device_path, destination_regions):
     files = []
-    files.append(devise_path)
+    files.append(device_path)
     validate_file_paths(files)
     #Note destination_regions was validated while singleton was being configured (Near origin and destination regions validation)
 
     ebs_clients = {}
     snaps = {}
     ebsclient_snaps = {}
-    with os.fdopen(os.open(devise_path, os.O_RDWR | os.O_CREAT), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
+    with os.fdopen(os.open(device_path, os.O_RDWR | os.O_CREAT), 'rb+') as f: #! Warning: these file permissions could cause problems on windows
         f.seek(0, os.SEEK_END)
         size = f.tell()
         gbsize = math.ceil(size / GIGABYTE)
         chunks = size // CHUNK_SIZE
         split = np.array_split(range(chunks), singleton.NUM_JOBS)
-        print("Size of file is", size, "bytes and", chunks, "chunks. Aligning snapshot to", gbsize, "GiB boundary.")
+        print("Size of", device_path, "is", size, "bytes and", chunks, "chunks. Aligning snapshot to", gbsize, "GiB boundary.")
         for region in destination_regions:
             ebs_clients[region] = boto3.client('ebs', region_name=region)
-            snaps[region] = ebs_clients[region].start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+ devise_path)
+            snaps[region] = ebs_clients[region].start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+ device_path)
             ebsclient_snaps[region]={"client":ebs_clients[region], "snapshot":snaps[region], "count":Counter(Manager(), 0)}
         print("Spawned", len(ebsclient_snaps), "EBS Clients and started a snapshot in each region.")
         with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
-            parallel(delayed(put_segments_fanout)(array, devise_path, f, ebsclient_snaps) for array in split)
+            parallel(delayed(put_segments_fanout)(array, device_path, f, ebsclient_snaps) for array in split)
         
         output = {}
         for region in ebsclient_snaps:
