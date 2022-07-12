@@ -14,11 +14,11 @@ The below one-liner will generate a list of all commands for which test cases ex
 
 > src/main.py list ORG_SNAP  
 > src/main.py download snapshotId PATH_TO_RAW_DEVICE 
-> src/main.py deltadownload snapshot1 snapshot2 PATH_TO_RAW_DEVICE
+> src/main.py deltadownload snapshot1 snapshot2 PATH_TO_RAW_DEVICE 
 > src/main.py upload UPLOAD_BLOCKS  
 > src/main.py copy snapshotId  
 > src/main.py diff snapshotId_1 snapshotId_2 
-> src/main.py sync snapshotId_1 snapshotId_2 snapshotId_parent
+> src/main.py sync snapshotId_1 snapshotId_2 snapshotId_parent 
 > src/main.py multiclone snapshotId PATH_TO_TEMP_DIRECTORY 
 > src/main.py fanout UPLOAD_BLOCKS PATH_TO_PROJECT_DIRECTORY 
 > src/main.py movetos3 snapshotId DEST_S3_BUCKET 
