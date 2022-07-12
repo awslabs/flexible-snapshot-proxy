@@ -8,6 +8,8 @@ Help is available by running `src/main.py -h`.
 
 Some usage examples are available as full-stack canaries in `src/test_functional.py`. 
 
+Example scenarios we have tested are in [Scenarios](Scenarios.md)
+
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
 ```
