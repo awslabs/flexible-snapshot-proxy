@@ -19,7 +19,16 @@ The last line in the output is the name of the resulting EBS Snapshot.
 
 NOTE: This approach is useful for making replicas of read-only block devices, such as attached iSCSI LUNs, USB disks or image files. It will result in an Application-inconsistent Snapshot if the block device has write I/O at the time of the transfer.
 
-This approach can be combined with `fsfreeze` on Linux systems to freeze write I/O to the target device prior to the transfer.
+This approach can be combined with `fsfreeze` on Linux systems to freeze write I/O to the target device prior to the transfer. Note that since
+we use a Lock() for our shared counter, we need to change the TMPDIR to something tmpfs-based for the script to function on a frozen / filesystem, and use -B and -nodeps to prevent everyone from writing:
+
+```
+[root@ip-34-223-14-193 flexible-snapshot-proxy]# xfs_freeze -f /; export TMPDIR=/run; python3 -B src/main.py -nodeps upload /dev/sda; unset TMPDIR; xfs_freeze -u /
+Size of /dev/sda is 8589934592 bytes and 16384 chunks
+/dev/sda took 145.12 seconds at 18312320.8 bytes/sec.
+Total chunks uploaded 5069
+snap-0028a1524e96e05b4
+```
 
 The example above was run on an AWS Snowcone snc1.medium instance, and was used to make a backup of the instance's root disk to us-east-1.
 
