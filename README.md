@@ -93,7 +93,7 @@ sync                Synchronizes the incremental difference between 2
 
 movetos3            Transfers an EBS Snapshot or an arbitrary image file / block 
 (TODO: verify		device to a customer-owned S3 Bucket (any S3 Storage Class, or 
-block->S3 path)	  	Snow Family), with zstandard compression, tuneable object 
+block->S3 path)		Snow Family), with zstandard compression, tuneable object 
 					size and an independent segment checksum.
 
 getfroms3           Transfers a Snapshot stored in a customer-owned S3
