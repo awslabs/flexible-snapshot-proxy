@@ -242,7 +242,6 @@ def arg_parse(args):
     return args
 
 if __name__ == "__main__":
-    print (sys.argv[1])
     if sys.argv[1] != "-nodeps":
         if install_dependencies() == False:
             sys.exit(126) # Exit code for missing dependencies. Script cannot run
