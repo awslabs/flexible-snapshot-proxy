@@ -218,7 +218,7 @@ class CanaryUploadSnapshots(unittest.TestCase):
         
         expected = self.compute_expected_output()
 
-        self.assertEqual(output[0], f"Size of file is {expected[0]} bytes and {expected[1]} chunks", "Script output is not expected\nNote: Test will fail is FULL_COPY = False. (By reducing size of snapshot expected output is too large)")
+        self.assertEqual(output[0], f"Size of {self.TEST_PARAMETERS['UPLOAD_BLOCKS']} is {expected[0]} bytes and {expected[1]} chunks", "Script output is not expected\nNote: Test will fail is FULL_COPY = False. (By reducing size of snapshot expected output is too large)")
         self.assertEqual(output[1], f"Total chunks uploaded {expected[1]}", "Script output is not expected")
         
     def tearDown(self):
@@ -495,7 +495,7 @@ class CanaryFanoutSnapshots(unittest.TestCase):
         
         expected = self.compute_expected_output()
 
-        self.assertEqual(output[0], f"Size of file is {expected[0]} bytes and {expected[1]} chunks. Aligning snapshot to {expected[2]} GiB boundary.", "Script output is not expected")
+        self.assertEqual(output[0], f"Size of {self.TEST_PARAMETERS['UPLOAD_BLOCKS']} is {expected[0]} bytes and {expected[1]} chunks. Aligning snapshot to {expected[2]} GiB boundary.", "Script output is not expected")
         self.assertEqual(output[1], f"Spawned {len(self.CLASS_SCOPE_VARS['REGION_LIST'])} EBS Clients and started a snapshot in each region.", "Script output is not expected")
 
         # check snapshots available logic
