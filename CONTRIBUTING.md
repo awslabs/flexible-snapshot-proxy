@@ -14,7 +14,7 @@ When filing an issue, please check existing open, or recently closed, issues to 
 
 * A reproducible test case or series of steps
 * The version of our code being used
-* Any modifications you've made relevant to the bug
+* Any modifications you've made relevant to the issue
 * Compute, Storage, Memory and Network details of your environment
 * Anything unusual about your environment or deployment
 

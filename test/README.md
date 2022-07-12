@@ -5,8 +5,9 @@ The purpose of the unit tests in this directory are to ensure reliability and ba
 
 # Requirements
 
-This testing script was developed to be run on an AWS EC2 instance.
-- Should have networking configurations to allow for connections to AWS s3 as well as EBS volumes and snapshots
+This testing script was designed to be run on an Amazon EC2 instance.
+- Should have networking configurations to allow for connections to Amazon S3 as well as EBS volumes and snapshots
+- TODO: Decouple script dependency on EC2/VPC to allow it to run anywhere.
 
 Other environments are likely to work with modification but are not supported currently.
 
