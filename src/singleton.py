@@ -27,6 +27,7 @@ def init():
     global S3_BUCKET #S3 bucket where snapshots are stored or will be stored in
     global VERBOSITY_LEVEL #-1 quite. 1,2,3 for v, vv, vvv respectively
     global DRY_RUN #Run a FSP Action, only checking permissions
+    global NODEPS #Skip Dependency Checks
 
     global RETRY_BLOCK_COUNT, RETRY_RANGE_COUNT, RETRY_JOB_COUNT
     RETRY_BLOCK_COUNT = 10

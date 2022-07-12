@@ -47,12 +47,13 @@ Creates parsers and enforces valid global parameter choices. Returns None if FSP
 def arg_parse(args):
     # Highest level parser
     parser = argparse.ArgumentParser(description='Flexible Snapshot Proxy (FSP) CLI.')
-    parser.add_argument("-o", "--origin_region", default=None, help="AWS Origin Region. Where snapshots will be found from. (default: .aws/config then us-east-1)")
-    parser.add_argument("-d", "--dry_run", default=False, action="store_true", help="Preform a dry run of FSP operation to check valid AWS permissions. (default: false)")
-    parser.add_argument("-q", "--quiet", default=False, action="store_true", dest="q", help="quiet output")
-    parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="output verbosity. (Pass/Fail blocks per region)")
-    parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="increased output verbosity. (Pass/Fail for individual blocks)")
+    parser.add_argument("-o", "--origin_region", default=None, help="AWS Origin Region - source of Snapshots. (default: .aws/config then us-east-1)")
+    parser.add_argument("-d", "--dry_run", default=False, action="store_true", help="Perform a dry run of FSP operation to check valid AWS permissions. (default: false)")
+    parser.add_argument("-q", "--quiet", default=False, action="store_true", dest="q", help="Quiet output.")
+    parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="Output verbosity. (Pass/Fail blocks per region)")
+    parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="Increased output verbosity. (Pass/Fail for individual blocks)")
     parser.add_argument("-vvv", default=False, action="store_true", dest="vvv", help="Maximum output verbosity. (All individual block retries will be recorded)")
+    parser.add_argument("-nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
     
     # sub_parser for each CLI action
     subparsers = parser.add_subparsers(dest='command', title='EBS Playground Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
@@ -176,6 +177,10 @@ def arg_parse(args):
     elif args.v == True:
         verbosity = 1
 
+    nodeps = False
+    if args.nodeps == True:
+        nodeps = True
+
     dry_run = args.dry_run
 
     # Validation of aws regions.
@@ -232,13 +237,16 @@ def arg_parse(args):
     singleton.S3_BUCKET = s3_bucket
     singleton.VERBOSITY_LEVEL = verbosity
     singleton.DRY_RUN = dry_run
+    singleton.NODEPS = nodeps
 
     return args
 
 if __name__ == "__main__":
-    if install_dependencies() == False:
-        sys.exit(126) # Exit code for missing dependencies. Script cannot run
-    print("Dependencies \U00002705") # unicode for GREEN CHECK
+    print (sys.argv[1])
+    if sys.argv[1] != "-nodeps":
+        if install_dependencies() == False:
+            sys.exit(126) # Exit code for missing dependencies. Script cannot run
+        print("Dependencies \U00002705") # unicode for GREEN CHECK
 
     args = arg_parse(sys.argv[1:])
     if args == None:
