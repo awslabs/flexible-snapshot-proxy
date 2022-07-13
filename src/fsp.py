@@ -469,7 +469,7 @@ def upload(file_path):
         split = np.array_split(range(chunks), singleton.NUM_JOBS)
         count = Counter(Manager(), 0)
         print("Size of", file_path, "is", size, "bytes and", chunks, "chunks")
-        snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+file_path)
+        snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path)
         with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
             parallel(delayed(put_blocks)(array, snap['SnapshotId'], file_path, count) for array in split)
         ebs.complete_snapshot(SnapshotId=snap['SnapshotId'], ChangedBlocksCount=count.value())
@@ -490,7 +490,7 @@ def copy(snapshot_id):
     ebs2 = boto3.client('ebs', region_name=singleton.AWS_DEST_REGION) # Using separate client for upload. This will allow cross-region/account copies.
     gbsize = ec2.describe_snapshots(SnapshotIds=[snapshot_id,],)['Snapshots'][0]['VolumeSize']
     count = Counter(Manager(), 0)
-    snap = ebs2.start_snapshot(VolumeSize=gbsize, Description='Copied by ebs.py from '+snapshot_id)
+    snap = ebs2.start_snapshot(VolumeSize=gbsize, Description='Copied by fsp.py from '+snapshot_id)
     with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
         parallel(delayed(copy_blocks_to_snap)('copy', snapshot_id, array, snap, count) for array in split)
     print('copy took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -511,7 +511,7 @@ def sync(snapshot_id_one, snapshot_id_two, destination_snapshot):
     ebs = boto3.client('ebs', region_name=singleton.AWS_DEST_REGION)
     gbsize = ec2.describe_snapshots(SnapshotIds=[snapshot_id_one,],)['Snapshots'][0]['VolumeSize']
     count = Counter(Manager(), 0)
-    snap = ebs.start_snapshot(ParentSnapshotId=destination_snapshot, VolumeSize=gbsize, Description='Copied delta by ebs.py from '+snapshot_id_one+'to'+snapshot_id_two)
+    snap = ebs.start_snapshot(ParentSnapshotId=destination_snapshot, VolumeSize=gbsize, Description='Copied delta by fsp.py from '+snapshot_id_one+'to'+snapshot_id_two)
     print(snap['SnapshotId'])
     with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
         parallel(delayed(copy_blocks_to_snap)('sync', snapshot_id_two, array, snap, count) for array in split)
@@ -546,7 +546,7 @@ def getfroms3(snapshot_prefix):
         objects.extend(response['Contents'])
     if len(objects) == 0:
         print("No snapshots found for prefix %s in bucket %s" % (snapshot_prefix, singleton.S3_BUCKET))
-    snap = ebs.start_snapshot(VolumeSize=int(objects[0]['Key'].split("/")[0].split(".")[1]), Description='Restored by ebs.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]['Key'].split("/")[0])
+    snap = ebs.start_snapshot(VolumeSize=int(objects[0]['Key'].split("/")[0].split(".")[1]), Description='Restored by fsp.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]['Key'].split("/")[0])
     with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:
         parallel(delayed(get_segment_from_s3)(object, snap['SnapshotId'], count) for object in objects)
     print ('getfroms3 took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -587,7 +587,7 @@ def fanout(device_path, destination_regions):
         print("Size of", device_path, "is", size, "bytes and", chunks, "chunks. Aligning snapshot to", gbsize, "GiB boundary.")
         for region in destination_regions:
             ebs_clients[region] = boto3.client('ebs', region_name=region)
-            snaps[region] = ebs_clients[region].start_snapshot(VolumeSize=gbsize, Description="Uploaded by ebs.py from "+ device_path)
+            snaps[region] = ebs_clients[region].start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+ device_path)
             ebsclient_snaps[region]={"client":ebs_clients[region], "snapshot":snaps[region], "count":Counter(Manager(), 0)}
         print("Spawned", len(ebsclient_snaps), "EBS Clients and started a snapshot in each region.")
         with Parallel(n_jobs=singleton.NUM_JOBS, require='sharedmem') as parallel:

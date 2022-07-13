@@ -18,40 +18,39 @@ import sys
 import os
 import subprocess
 
-sys.path.insert(1, '../src') #makes source code testable
+sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src') #makes source code testable
 
 from main import install_dependencies
 
 '''
 Below are unit tests for the dependency checker in src/main.py
 '''
-class AllDependenciesInstalled(unittest.TestCase):
-  def setUp(self):
-    super().setUp()
-
-    subprocess.run(['pip3', 'install', '-q', '-r', f'{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt'])
-
+class DependenciesTests(unittest.TestCase):
   def all_clear(self):
+    subprocess.run(['pip3', 'install', '-q', '-r', f'{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt'])
     self.assertTrue(install_dependencies(), "Dependencies were installed, but installer failed.")
 
-class DependenciesOutOfDate(unittest.TestCase):
   def one_out_of_date(self):
     #downgrade aws cli 
     subprocess.run(['pip3', 'uninstall', '--yes', 'aws-shell', '-q'])
     subprocess.run(['pip3', 'install', 'aws-shell==0.1.1', '-q'])
     self.assertTrue(install_dependencies(), "Should have upgraded aws cli and returned True")
 
-class DependenciesNotPresent(unittest.TestCase):
   def missing_boto3(self):
     #downgrade aws cli 
     subprocess.run(['pip3', 'uninstall', '--yes', 'boto3', '-q'])
     self.assertTrue(install_dependencies(), "Should have installed boto3 and returned True")
 
+  def no_dependencies_installed(self):
+    subprocess.run(['pip3', 'uninstall', '--yes', '-q', '-r', f'{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt'])
+    self.assertTrue(install_dependencies(), "Should have installed boto3 and returned True")
+
 def DependencyCheckerSuite():
   suite = unittest.TestSuite()
 
-  suite.addTest(AllDependenciesInstalled('all_clear'))
-  suite.addTest(DependenciesOutOfDate('one_out_of_date'))
-  suite.addTest(DependenciesNotPresent('missing_boto3'))
+  suite.addTest(DependenciesTests('all_clear'))
+  suite.addTest(DependenciesTests('one_out_of_date'))
+  suite.addTest(DependenciesTests('missing_boto3'))
+  suite.addTest(DependenciesTests('no_dependencies_installed'))
 
   return suite

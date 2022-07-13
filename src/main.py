@@ -53,7 +53,7 @@ def arg_parse(args):
     parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="Output verbosity. (Pass/Fail blocks per region)")
     parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="Increased output verbosity. (Pass/Fail for individual blocks)")
     parser.add_argument("-vvv", default=False, action="store_true", dest="vvv", help="Maximum output verbosity. (All individual block retries will be recorded)")
-    parser.add_argument("-nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
+    parser.add_argument("--nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
     
     # sub_parser for each CLI action
     subparsers = parser.add_subparsers(dest='command', title='EBS Playground Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
@@ -242,15 +242,16 @@ def arg_parse(args):
     return args
 
 if __name__ == "__main__":
-    if sys.argv[1] != "-nodeps":
-        if install_dependencies() == False:
-            sys.exit(126) # Exit code for missing dependencies. Script cannot run
-        print("Dependencies \U00002705") # unicode for GREEN CHECK
-
     args = arg_parse(sys.argv[1:])
+
     if args == None:
         print("\nExiting")
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+    if singleton.NODEPS == False:
+        if install_dependencies() == False:
+            sys.exit(126) # Exit code for missing dependencies. Script cannot run
+        print("Dependencies \U00002705") # unicode for GREEN CHECK
 
     #Placing these imports earlier creates a circular dependency with the installer
     from fsp import list, diff, download, deltadownload, upload, copy, sync, movetos3, getfroms3, multiclone, fanout
@@ -287,7 +288,7 @@ if __name__ == "__main__":
         multiclone(snapshot_id=args.snapshot, infile=args.file_path)
         
     elif command == "fanout":
-        fanout(devise_path=args.devise_path, destination_regions=args.destinations)
+        fanout(device_path=args.devise_path, destination_regions=args.destinations)
     else:
         print("Unknown command: %s" % command)
         sys.exit(127) # Exit code for command not found. Script cannot run
