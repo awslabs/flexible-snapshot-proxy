@@ -104,8 +104,7 @@ if __name__ == '__main__':
         setup()
 
     to_test = parse_args(sys.argv[1:])
-    runner = unittest.TextTestRunner()
-    install_dependencies() # Canary tests run with --nodeps flag set
+    runner = unittest.TextTestRunner(verbosity=2)
 
     '''
     Note: Run tests in order of faster to lowest building dependency on each other

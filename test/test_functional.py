@@ -24,6 +24,21 @@ import subprocess
 from time import sleep
 from shutil import rmtree
 
+def SmallCanarySuite():
+    suite = unittest.TestSuite()
+    suite.addTest(CanaryListSnapshot('small_test_list'))
+    suite.addTest(CanaryDownloadSnapshots('small_test_download'))
+    suite.addTest(CanaryDeltadownloadSnapshots('small_test_deltadownload'))
+    suite.addTest(CanaryUploadSnapshots('small_test_upload'))
+    suite.addTest(CanaryCopySnapshot('small_test_copy'))
+    suite.addTest(CanaryDiffSnapshots('small_test_diff'))
+    suite.addTest(CanarySyncSnapshots('small_test_sync'))
+    suite.addTest(CanaryMultiCloneSnapshot('small_test_multiclone'))
+    suite.addTest(CanaryFanoutSnapshots('small_test_fanout'))
+    suite.addTest(CanaryS3Snapshot('small_test_movetos3'))
+    suite.addTest(CanaryS3Snapshot('small_test_getfroms3'))
+    return suite
+
 def read_configuration_file():
     with open(f"{os.path.dirname(os.path.realpath(__file__))}/config.yaml", 'r') as file:
         config = yaml.safe_load(file)
@@ -645,18 +660,3 @@ class CanaryS3Snapshot(unittest.TestCase):
                 )
             except Exception as e:
                 print("AWS Error Message\n", e)
-
-def SmallCanarySuite():
-    suite = unittest.TestSuite()
-    suite.addTest(CanaryListSnapshot('small_test_list'))
-    suite.addTest(CanaryDownloadSnapshots('small_test_download'))
-    suite.addTest(CanaryDeltadownloadSnapshots('small_test_deltadownload'))
-    suite.addTest(CanaryUploadSnapshots('small_test_upload'))
-    suite.addTest(CanaryCopySnapshot('small_test_copy'))
-    suite.addTest(CanaryDiffSnapshots('small_test_diff'))
-    suite.addTest(CanarySyncSnapshots('small_test_sync'))
-    suite.addTest(CanaryMultiCloneSnapshot('small_test_multiclone'))
-    suite.addTest(CanaryFanoutSnapshots('small_test_fanout'))
-    suite.addTest(CanaryS3Snapshot('small_test_movetos3'))
-    suite.addTest(CanaryS3Snapshot('small_test_getfroms3'))
-    return suite
