@@ -15,31 +15,149 @@
 """
 
 import argparse
+from operator import ne
 import os.path
 import subprocess
 import sys
 
 import singleton #Project Scoped Global Vars
 
+"""
+Works like java comparator
+v1 < v2 => return < 0
+v1 == v2 => return == 0
+v1 > v2 => return > 0
+"""
+def version_cmp(v1, v2):
+    v1_t = tuple()
+    v2_t = tuple()
+    try:
+        v1_t = tuple(map(int, (v1.split("."))))
+        v2_t = tuple(map(int, (v2.split("."))))
+    except ValueError:
+        print("Versions are in incompatible format. Should be tag formatted (xx.xx.xx). Exiting...")
+        sys.exit(1) # Exit code for invalid parameters. Script cannot run
+    i = len(v1_t) - len(v2_t)
+    if i < 0:
+        zeros = -i*(0,)
+        v1_t += zeros
+    elif i > 0:
+        zeros = i*(0,)
+        v2_t += zeros
+
+    less_than = v1_t <= v2_t
+    greater_than = v1_t >= v2_t
+
+    if less_than and greater_than:
+        return 0
+    elif less_than == True:
+        return -1
+    else:
+        return 1
+
 '''
 TO CONTROL PACKAGE VERSIONS. EACH LINE IN ../requirements.txt CAN TAKE ON ONE OF THE FOLLOWING FORMS:
 
-Requirement	    Description
-foo	            any version of foo
-foo>=5	        any version of foo, above or equal to 5
-foo>=5.6	    any version of foo, above or equal to 5.6
-foo==5.6.1	    exact match
-foo>5	        foo-5 or greater, including minor and patch
-foo>5,<5.7	    foo-5 or greater, but less than foo-5.7
-foo>0,<5.7	    any foo version less than foo-5.7
+Case    Requirement	    Description
+1       foo	            any version of foo [DO NOT DO THIS!]
+2       foo>=5	        any version of foo, above or equal to 5
+3       foo>=5.6	    any version of foo, above or equal to 5.6
+4       foo==5.6.1	    exact match
+5       foo>5	        foo-5 or greater, including minor and patch
+6       foo>5,<5.7	    foo-5 or greater, but less than foo-5.7
+7       foo>0,<5.7	    any foo version less than foo-5.7
 '''
-def install_dependencies():
-    install_command = subprocess.run(['pip3', 'install', '-r', f'{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt'], capture_output=True)
-    if install_command.returncode != 0:
-        print("Dependencies \U0000274C", "stdout: " + install_command.stdout.decode('ascii'), "stderr: " + install_command.stderr.decode('ascii'), sep='\n') # unicode for RED X
-        return False
-    else:
-        return True
+
+def dependency_checker(pip_freeze_output, requirements):
+    requires = {} # Mapping <Package_Name>: {Min: XX.XX.XX or None, Max: XX.XX.XX or None} N.B. Version numbers are both inclusive
+
+    # Mapping <Package_Name> |-> <Version_Number>
+    to_install = {}
+    to_fix_version = {}
+
+    for line in requirements:
+        if len(line.strip()) == 0: #Blank lines
+            continue
+
+        # Case 2, 3
+        if ">=" in line:
+            package, version = tuple(line.split(">=", 1))
+            requires[package.strip()] = {"min": version.strip(), "max": None}
+        # Case 4
+        elif "==" in line:
+            package, version = tuple(line.split("==", 1))
+            requires[package.strip()] = {"min": version.strip(), "max": version.strip()}
+        # Case 5
+        elif ((">" in line) and (not "," in line)):
+            package, version = tuple(line.split(">", 1))
+            requires[package.strip()] = {"min": version.strip(), "max": None}
+        # Case 6 & 7
+        elif ">" in line and "," in line:
+            package, versions = tuple(line.split(">", 1))
+            version = version.strip()
+            min, max = tuple(versions.split(",<", 1))
+            requires[package.strip()] = {"min": min.strip(), "max": max.strip()}
+        # Case 1
+        else:
+            print("Malformed requirement.txt file. All packages need version restrictions. Exiting...")
+            sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+    for line in pip_freeze_output:
+        package = ""
+        version = None
+        if not ("==" in line): #No version packages. Odd but possible
+            package = line.split(' ', 1)[0]
+        else:
+            package, version = tuple(line.split("==", 1))
+            package.strip()
+            version.strip()
+
+        """
+        3 Cases:
+        1. Package not in requires => skip. User needs but this script does not
+        2. Package in requires AND version ∈ [min, max] => remove package from requires.
+        3. Package in requires AND version !∈ [min, max] => add package and max version to to_fix_version.
+
+        Note: remaining packages in requires need to be installed as max supported version
+        """
+        if not package in requires:
+            continue
+        else:
+            min_version = requires[package]["min"]
+            max_version = requires[package]["max"]
+            
+            # is okay?
+            if ((min_version == None and max_version == None)
+            or (max_version == None and version_cmp(version, min_version)  >= 0)
+            or ((version_cmp(version, min_version)  >= 0) and (version_cmp(version, max_version)  <= 0))):
+                del requires[package]
+                continue
+            else:
+                if max_version != None:
+                    to_fix_version[package] = max_version
+                else:
+                    to_fix_version[package] = min_version
+                del requires[package]
+
+    for package in requires:
+        if requires[package]["max"] != None:
+            to_install[package] = requires[package]["max"]
+        else:
+            to_install[package] = requires[package]["min"]
+
+    return to_install, to_fix_version
+
+def install_dependencies(needs_install, needs_version_adjustment):
+    print("Fixing Required Dependencies...")
+    for package in needs_version_adjustment:
+        if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_version_adjustment[package]}']).returncode != 0:
+            return False
+    
+    for package in needs_install:
+        if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_install[package]}']).returncode != 0:
+            return False
+
+    return True
 
 '''
 Creates parsers and enforces valid global parameter choices. Returns None if FSP should abort
@@ -53,7 +171,7 @@ def arg_parse(args):
     parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="Output verbosity. (Pass/Fail blocks per region)")
     parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="Increased output verbosity. (Pass/Fail for individual blocks)")
     parser.add_argument("-vvv", default=False, action="store_true", dest="vvv", help="Maximum output verbosity. (All individual block retries will be recorded)")
-    parser.add_argument("-nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
+    parser.add_argument("--nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
     
     # sub_parser for each CLI action
     subparsers = parser.add_subparsers(dest='command', title='EBS Playground Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
@@ -110,10 +228,9 @@ def arg_parse(args):
     fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution on separate lines')
     
     args = parser.parse_args(args)
-    
-    '''
-    Setup Global Variables
-    '''
+    return args
+
+def setup_singleton(args):
     import boto3 # Safe since this import is not reached unless dependency check passes.
     user_account = ''
     user_id = ''
@@ -239,18 +356,63 @@ def arg_parse(args):
     singleton.DRY_RUN = dry_run
     singleton.NODEPS = nodeps
 
-    return args
-
 if __name__ == "__main__":
-    if sys.argv[1] != "-nodeps":
-        if install_dependencies() == False:
-            sys.exit(126) # Exit code for missing dependencies. Script cannot run
-        print("Dependencies \U00002705") # unicode for GREEN CHECK
-
     args = arg_parse(sys.argv[1:])
+
     if args == None:
         print("\nExiting")
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+    if args.nodeps == False:
+        print("Checking Dependencies...")
+
+        # Get users current packages
+        result = subprocess.run(["pip3", "freeze"], capture_output=True)
+        if result.returncode != 0:
+            print("Cannot check your dependencies")
+            sys.exit(1)
+        pip_freeze_output = result.stdout.decode('utf-8').split('\n')
+
+        # get requirements
+        requirements = open(f"{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt").readlines()
+        requirements = [x.strip() for x in requirements]
+        requirements = [x.replace(" ","") for x in requirements]
+
+        needs_install, needs_version_adjustment = dependency_checker(pip_freeze_output, requirements)
+
+        # Ask user for permission to install/upgrade/downgrade pip3 packages
+        if len(needs_install) != 0 or len(needs_version_adjustment) != 0:
+            print("Flexible Snapshot Proxy CLI Would like to make the following changes to your system pip3 packages:\n")
+            if len(needs_install) != 0:
+                print("\tInstall the following: <PACKAGE>==<VERSION>")
+                for package in needs_install:
+                    if needs_install[package] == None:
+                        print(f"\t\t{package}")
+                    else:
+                        print(f"\t\t{package}=={needs_install[package]}")
+            if len(needs_version_adjustment) != 0:
+                print("\tUpgrade or Downgrade the following: <PACKAGE>==<VERSION>")
+                for package in needs_version_adjustment:
+                    if needs_version_adjustment[package] == None:
+                        print(f"\t\t{package}")
+                    else:
+                        print(f"\t\t{package}=={needs_version_adjustment[package]}")
+            
+            choice = input("\nAgree to these changes? (y/n): ").strip()
+            if choice == "y" or choice == "Y":
+                if install_dependencies(needs_install, needs_version_adjustment) == False:
+                    print("Failed to Install Dependencies\nExiting...")
+                    sys.exit(1) # Exit code for invalid parameters. Script cannot run
+            elif choice == "n" or choice == "N":
+                print("No changes to system pip3 packages\nExiting...")
+                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+            else:
+                print("Invalid Input\nExiting...")
+                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+        print("Dependencies \U00002705") # unicode for GREEN CHECK
+    
+    setup_singleton(args)
 
     #Placing these imports earlier creates a circular dependency with the installer
     from fsp import list, diff, download, deltadownload, upload, copy, sync, movetos3, getfroms3, multiclone, fanout
@@ -287,7 +449,7 @@ if __name__ == "__main__":
         multiclone(snapshot_id=args.snapshot, infile=args.file_path)
         
     elif command == "fanout":
-        fanout(devise_path=args.devise_path, destination_regions=args.destinations)
+        fanout(device_path=args.devise_path, destination_regions=args.destinations)
     else:
         print("Unknown command: %s" % command)
         sys.exit(127) # Exit code for command not found. Script cannot run

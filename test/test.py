@@ -22,6 +22,9 @@ import yaml
 import argparse
 import sys
 
+sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src')
+from main import install_dependencies
+
 #import the tests
 import test_functional
 import test_unit
@@ -97,11 +100,11 @@ def parse_args(args):
     return parser.parse_args(args)
 
 if __name__ == '__main__':
-    if not os.path.exists('config.yaml'):
+    if not os.path.exists(f'{os.path.dirname(os.path.realpath(__file__))}/config.yaml'):
         setup()
 
     to_test = parse_args(sys.argv[1:])
-    runner = unittest.TextTestRunner()
+    runner = unittest.TextTestRunner(verbosity=2)
 
     '''
     Note: Run tests in order of faster to lowest building dependency on each other

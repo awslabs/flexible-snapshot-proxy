@@ -24,6 +24,21 @@ import subprocess
 from time import sleep
 from shutil import rmtree
 
+def SmallCanarySuite():
+    suite = unittest.TestSuite()
+    suite.addTest(CanaryListSnapshot('small_test_list'))
+    suite.addTest(CanaryDownloadSnapshots('small_test_download'))
+    suite.addTest(CanaryDeltadownloadSnapshots('small_test_deltadownload'))
+    suite.addTest(CanaryUploadSnapshots('small_test_upload'))
+    suite.addTest(CanaryCopySnapshot('small_test_copy'))
+    suite.addTest(CanaryDiffSnapshots('small_test_diff'))
+    suite.addTest(CanarySyncSnapshots('small_test_sync'))
+    suite.addTest(CanaryMultiCloneSnapshot('small_test_multiclone'))
+    suite.addTest(CanaryFanoutSnapshots('small_test_fanout'))
+    suite.addTest(CanaryS3Snapshot('small_test_movetos3'))
+    suite.addTest(CanaryS3Snapshot('small_test_getfroms3'))
+    return suite
+
 def read_configuration_file():
     with open(f"{os.path.dirname(os.path.realpath(__file__))}/config.yaml", 'r') as file:
         config = yaml.safe_load(file)
@@ -82,7 +97,7 @@ class CanaryListSnapshot(unittest.TestCase):
     def small_test_list(self):
         
         #Run script to move see size of snapshot
-        command = f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py list {self.TEST_PARAMETERS['ORG_SNAP']}"
+        command = f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps list {self.TEST_PARAMETERS['ORG_SNAP']}"
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
         result = subprocess.run(args, capture_output=True)
@@ -113,7 +128,7 @@ class CanaryDownloadSnapshots(unittest.TestCase):
         self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE'] = testing_configurations['small-volume-path']
         
     def small_test_download(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps download {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -150,7 +165,7 @@ class CanaryDeltadownloadSnapshots(unittest.TestCase):
         self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE'] = testing_configurations['small-volume-path']
         
     def small_test_deltadownload(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py deltadownload {self.TEST_PARAMETERS['snapshot1']} {self.TEST_PARAMETERS['snapshot2']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps deltadownload {self.TEST_PARAMETERS['snapshot1']} {self.TEST_PARAMETERS['snapshot2']} {self.TEST_PARAMETERS['PATH_TO_RAW_DEVICE']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -203,7 +218,7 @@ class CanaryUploadSnapshots(unittest.TestCase):
 
         
     def small_test_upload(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py upload {self.TEST_PARAMETERS['UPLOAD_BLOCKS']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps upload {self.TEST_PARAMETERS['UPLOAD_BLOCKS']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -249,7 +264,7 @@ class CanaryCopySnapshot(unittest.TestCase):
         
         
     def small_test_copy(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py copy {self.TEST_PARAMETERS['snapshotId']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps copy {self.TEST_PARAMETERS['snapshotId']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -311,7 +326,7 @@ class CanaryDiffSnapshots(unittest.TestCase):
         self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY'] = testing_configurations['PATH_TO_PROJECT_DIRECTORY']
         
     def small_test_diff(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py diff {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps diff {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -349,7 +364,7 @@ class CanarySyncSnapshots(unittest.TestCase):
 
         
     def small_test_sync(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py sync {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']} {self.TEST_PARAMETERS['snapshotId_parent']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps sync {self.TEST_PARAMETERS['snapshotId_1']} {self.TEST_PARAMETERS['snapshotId_2']} {self.TEST_PARAMETERS['snapshotId_parent']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -414,7 +429,7 @@ class CanaryMultiCloneSnapshot(unittest.TestCase):
         open(f"{self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt", mode='a').close() #Create the file to be written to
         
     def small_test_multiclone(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py multiclone {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps multiclone {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['PATH_TO_TEMP_DIRECTORY']}/test.txt"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -480,7 +495,7 @@ class CanaryFanoutSnapshots(unittest.TestCase):
 
         
     def small_test_fanout(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py fanout {self.TEST_PARAMETERS['UPLOAD_BLOCKS']} {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/test/{self.TEST_PARAMETERS['REGIONS_FILE']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps fanout {self.TEST_PARAMETERS['UPLOAD_BLOCKS']} {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/test/{self.TEST_PARAMETERS['REGIONS_FILE']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -527,7 +542,7 @@ class CanaryFanoutSnapshots(unittest.TestCase):
     def tearDown(self):
         super(CanaryFanoutSnapshots, self).tearDown()
         
-        os.remove("regions.txt")
+        os.remove(f'{os.path.dirname(os.path.realpath(__file__))}/regions.txt')
 
         for region in self.CLASS_SCOPE_VARS['REGION_MAP']:
             snap_id = self.CLASS_SCOPE_VARS['REGION_MAP'][region]
@@ -560,7 +575,7 @@ class CanaryS3Snapshot(unittest.TestCase):
     def small_test_movetos3(self):
         self.CLASS_SCOPE_VARS['DESTROY'] = False #Work Around for deprovisioning test resources too early
         
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py movetos3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps movetos3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
         
         print(f"\nRunning Script: {command}")
         args = command.split(' ')
@@ -587,7 +602,7 @@ class CanaryS3Snapshot(unittest.TestCase):
         self.assertNotEqual(len(objects), 0, f"Uploaded snapshot is not in destination ({self.TEST_PARAMETERS['DEST_S3_BUCKET']}) s3 Bucket")
         
     def small_test_getfroms3(self):
-        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py getfroms3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
+        command =f"python3 {self.TEST_PARAMETERS['PATH_TO_PROJECT_DIRECTORY']}/src/main.py --nodeps getfroms3 {self.TEST_PARAMETERS['snapshotId']} {self.TEST_PARAMETERS['DEST_S3_BUCKET']}"
         self.CLASS_SCOPE_VARS['DESTROY'] = True #Work Around for deprovisioning test resources too early
 
         print(f"\nRunning Script: {command}")
@@ -645,18 +660,3 @@ class CanaryS3Snapshot(unittest.TestCase):
                 )
             except Exception as e:
                 print("AWS Error Message\n", e)
-
-def SmallCanarySuite():
-    suite = unittest.TestSuite()
-    suite.addTest(CanaryListSnapshot('small_test_list'))
-    suite.addTest(CanaryDownloadSnapshots('small_test_download'))
-    suite.addTest(CanaryDeltadownloadSnapshots('small_test_deltadownload'))
-    suite.addTest(CanaryUploadSnapshots('small_test_upload'))
-    suite.addTest(CanaryCopySnapshot('small_test_copy'))
-    suite.addTest(CanaryDiffSnapshots('small_test_diff'))
-    suite.addTest(CanarySyncSnapshots('small_test_sync'))
-    suite.addTest(CanaryMultiCloneSnapshot('small_test_multiclone'))
-    suite.addTest(CanaryFanoutSnapshots('small_test_fanout'))
-    suite.addTest(CanaryS3Snapshot('small_test_movetos3'))
-    suite.addTest(CanaryS3Snapshot('small_test_getfroms3'))
-    return suite
