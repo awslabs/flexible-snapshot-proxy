@@ -15,10 +15,12 @@
 """
 
 import argparse
-from operator import ne
+from contextlib import suppress
 import os.path
 import subprocess
 import sys
+from os.path import exists
+from datetime import datetime, timedelta
 
 import singleton #Project Scoped Global Vars
 
@@ -172,6 +174,7 @@ def arg_parse(args):
     parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="Increased output verbosity. (Pass/Fail for individual blocks)")
     parser.add_argument("-vvv", default=False, action="store_true", dest="vvv", help="Maximum output verbosity. (All individual block retries will be recorded)")
     parser.add_argument("--nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
+    parser.add_argument("--suppress_writes", default=False, action="store_true", help="Intended for underpowered devices. Will not write log files or check dependencies")
     
     # sub_parser for each CLI action
     subparsers = parser.add_subparsers(dest='command', title='EBS Playground Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
@@ -278,7 +281,7 @@ def setup_singleton(args):
 
     full_copy =  False
     if 'full_copy' in args:
-        full_copy = True
+        full_copy = args.full_copy
     
     s3_bucket = None
     if 's3Bucket' in args:
@@ -294,10 +297,8 @@ def setup_singleton(args):
     elif args.v == True:
         verbosity = 1
 
-    nodeps = False
-    if args.nodeps == True:
-        nodeps = True
-
+    nodeps = args.nodeps
+    suppress_writes = args.suppress_writes
     dry_run = args.dry_run
 
     # Validation of aws regions.
@@ -355,6 +356,7 @@ def setup_singleton(args):
     singleton.VERBOSITY_LEVEL = verbosity
     singleton.DRY_RUN = dry_run
     singleton.NODEPS = nodeps
+    singleton.SUPPRESS_WRITES = suppress_writes
 
 if __name__ == "__main__":
     args = arg_parse(sys.argv[1:])
@@ -362,6 +364,15 @@ if __name__ == "__main__":
     if args == None:
         print("\nExiting")
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
+
+    timestamp_file = f"{os.path.dirname(os.path.realpath(__file__))}/../.fsp_deps_timestamp"
+    if exists(timestamp_file):
+        ctime = os.path.getctime(timestamp_file)
+        ctime = datetime.fromtimestamp(ctime)
+        now = datetime.now()
+        delta = timedelta(days=7)
+        if now < (ctime + delta): # If the timestamp_file was created within a week, skip dependencies check
+            args.nodeps = True
 
     if args.nodeps == False:
         print("Checking Dependencies...")
@@ -410,6 +421,10 @@ if __name__ == "__main__":
                 print("Invalid Input\nExiting...")
                 sys.exit(1) # Exit code for invalid parameters. Script cannot run
 
+        if exists(timestamp_file):
+            os.remove(timestamp_file)
+        open(timestamp_file, "a").close() # Create the timestamp file to cache dependencies check for 1 week
+        
         print("Dependencies \U00002705") # unicode for GREEN CHECK
     
     setup_singleton(args)

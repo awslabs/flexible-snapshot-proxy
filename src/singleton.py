@@ -28,6 +28,7 @@ def init():
     global VERBOSITY_LEVEL #-1 quite. 1,2,3 for v, vv, vvv respectively
     global DRY_RUN #Run a FSP Action, only checking permissions
     global NODEPS #Skip Dependency Checks
+    global SUPPRESS_WRITES #Script will not produce log files
 
     global RETRY_BLOCK_COUNT, RETRY_RANGE_COUNT, RETRY_JOB_COUNT
     RETRY_BLOCK_COUNT = 10
