@@ -264,7 +264,7 @@ def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_WRONLY), 'rb+') 
+            os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), 'rb+') 
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
