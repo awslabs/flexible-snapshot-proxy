@@ -120,7 +120,21 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
         count.increment()
     return resp
 
-# Get a Snapshot Block, verify Checksum and write it at the right offset.
+# Description:      Helper function to write a block to a file at the right offset.
+# Data path:        Local Memory -> File
+# Input worker:     N/A
+# Input data:       CHUNK_SIZE worth of bytes
+# Input metadata:   Filename, Block Metadata containing Offset
+# Output:           N/A
+#
+def write_block_to_file(file, block, data):
+    with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
+        f.seek(block['BlockIndex']*CHUNK_SIZE)
+        f.write(data)
+        f.flush()
+        f.close()
+
+# Get a Snapshot Block, verify Checksum and write it to a file.
 # Data Path: Local Memory (from try_get_block()) -> File / Block Device
 def get_block(block, ebs, files, snapshot_id):
     h = hashlib.sha256()
@@ -132,11 +146,7 @@ def get_block(block, ebs, files, snapshot_id):
     if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
         if chksum == checksum:
             for file in files:
-                with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
-                    f.seek(block['BlockIndex']*CHUNK_SIZE)
-                    f.write(data)
-                    f.flush()
-                    f.close()
+                write_block_to_file(file, block, data)
         else:
             print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
             get_block(block,ebs,files,snapshot_id) # We retry indefinitely on checksum failure.
@@ -156,11 +166,7 @@ def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
     chksum = b64encode(h.digest()).decode()
     if chksum == checksum:
         for file in files:
-            with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
-                f.seek(block['BlockIndex']*CHUNK_SIZE)
-                f.write(data)
-                f.flush()
-                f.close()
+            write_block_to_file(file, block, data)
     else:
         print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
         get_changed_block(block, ebs, files, snapshot_id_two) # We retry indefinitely on checksum failure.
