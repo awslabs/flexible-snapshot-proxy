@@ -60,6 +60,7 @@ import singleton
 CHUNK_SIZE = 1024 * 512
 MEGABYTE = 1024 * 1024
 GIGABYTE = MEGABYTE * 1024
+KNOWN_SPARSE_CHECKSUM = "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE="
 
 # Source for Atomic Counter: http://eli.thegreenplace.net/2012/01/04/shared-counter-with-pythons-multiprocessing
 class Counter(object):
@@ -75,12 +76,17 @@ class Counter(object):
         with self.lock:
             return self.val.value
 
-# Wrapper around ebs.get_snapshot_block() with retry logic.
-# Data path: EBS Snapshot -> EBS Direct API -> Local Memory
+# Description:      Wrapper around ebs.get_snapshot_block() with retry logic.
+# Data path:        EBS Snapshot -> EBS Direct API -> Local Memory
+# Input worker:     EBS Client
+# Input data:       N/A
+# Input metadata:   Snapshot ID (string), BlockIndex, BlockToken
+# Output:           EBS Direct API Response that contains CHUNK_SIZE worth of data
+#
 def try_get_block(ebs, snapshot_id, block_index, block_token):
     resp = None
     retry_count = 0
-    while resp == None:
+    while resp is None:
         try:
             resp = ebs.get_snapshot_block(SnapshotId=snapshot_id, BlockIndex=block_index, BlockToken=block_token)
             continue
@@ -91,17 +97,22 @@ def try_get_block(ebs, snapshot_id, block_index, block_token):
             pass
     return resp
 
-# Wrapper around ebs.put_snapshot_block() with retry logic.
-# Data path: Local Memory -> EBS Direct API -> EBS Snapshot
+# Description:      Wrapper around boto3 ebs.put_snapshot_block() with retry logic.
+# Data path:        Local Memory -> EBS Direct API -> EBS Snapshot
+# Input worker:     EBS Client
+# Input data:       CHUNK_SIZE worth of bytes
+# Input metadata:   Snapshot ID (string), BlockIndex, calculated SHA256 Checksum of data, atomic counter that we increment on success
+# Output:           EBS Direct API Response
+#
 def try_put_block(ebs, block, snap_id, data, checksum, count):
     resp = None
     retry_count = 0
-    if checksum != "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE=" or singleton.FULL_COPY: ## Known sparse block checksum we can skip
-        while resp == None:
+    if checksum != KNOWN_SPARSE_CHECKSUM or FULL_COPY: ## Known sparse block checksum we can skip
+        while resp is None:
             try:
                 resp = ebs.put_snapshot_block(SnapshotId=snap_id, BlockIndex=block, BlockData=data, DataLength=CHUNK_SIZE, Checksum=checksum, ChecksumAlgorithm='SHA256')
                 continue
-            except:
+            except Exception as e:
                 retry_count += 1
                 if retry_count > 1:
                     print (block, "throttled by API", retry_count, "times, retrying.")
@@ -118,7 +129,7 @@ def get_block(block, ebs, files, snapshot_id):
     checksum = resp['Checksum'];
     h.update(data)
     chksum = b64encode(h.digest()).decode()
-    if checksum != "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE=" or singleton.FULL_COPY: ## Known sparse block checksum we can skip
+    if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
         if chksum == checksum:
             for file in files:
                 with os.fdopen(os.open(file, os.O_WRONLY), 'rb+') as f: # On Windows, we can write to a raw disk, but can't create or read.
@@ -236,7 +247,7 @@ def get_block_s3(block, ebs, s3, snapshot_prefix):
     checksum = resp['Checksum'];
     h.update(data)
     chksum = b64encode(h.digest()).decode()
-    if checksum != "B4VNL+8pega6gWheZgwzLeNtXRjVRpJ9MNqtbX/aFUE=" or singleton.FULL_COPY: ## Known sparse block checksum we can skip
+    if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
         if chksum == checksum:
             s3.put_object(Body=data, Bucket=singleton.S3_BUCKET, Key="{}/{}.{}".format(snapshot_prefix, block['BlockIndex'], h.hexdigest()))
         else:
