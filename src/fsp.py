@@ -107,7 +107,7 @@ def try_get_block(ebs, snapshot_id, block_index, block_token):
 def try_put_block(ebs, block, snap_id, data, checksum, count):
     resp = None
     retry_count = 0
-    if checksum != KNOWN_SPARSE_CHECKSUM or FULL_COPY: ## Known sparse block checksum we can skip
+    if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
         while resp is None:
             try:
                 resp = ebs.put_snapshot_block(SnapshotId=snap_id, BlockIndex=block, BlockData=data, DataLength=CHUNK_SIZE, Checksum=checksum, ChecksumAlgorithm='SHA256')
