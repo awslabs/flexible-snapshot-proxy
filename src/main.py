@@ -177,7 +177,7 @@ def arg_parse(args):
     parser.add_argument("--suppress_writes", default=False, action="store_true", help="Intended for underpowered devices. Will not write log files or check dependencies")
     
     # sub_parser for each CLI action
-    subparsers = parser.add_subparsers(dest='command', title='EBS Playground Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
+    subparsers = parser.add_subparsers(dest='command', title='Flexible Snapshot Proxy (FSP) Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
     list_parser = subparsers.add_parser('list', help='Returns accurate size of a Snapshot by enumerating actual consumed space')
     diff_parser = subparsers.add_parser('diff', help='Returns accurate size of a Snapshot Delta by enumerating the incremental difference between 2 snapshots with a common parent')
     download_parser = subparsers.add_parser('download', help='Transfers an EBS Snapshot to an arbitrary file or block device')
@@ -227,7 +227,7 @@ def arg_parse(args):
     multiclone_parser.add_argument('snapshot', help='Snapshot ID to multiclone')
     multiclone_parser.add_argument('file_path', help='File path to a .txt file containing list of multiclone destinations')
 
-    fanout_parser.add_argument('devise_path', help='File path to raw device for fanout snapshot distributution')
+    fanout_parser.add_argument('device_path', help='File path to raw device for fanout snapshot distributution')
     fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution on separate lines')
     
     args = parser.parse_args(args)
@@ -464,7 +464,7 @@ if __name__ == "__main__":
         multiclone(snapshot_id=args.snapshot, infile=args.file_path)
         
     elif command == "fanout":
-        fanout(device_path=args.devise_path, destination_regions=args.destinations)
+        fanout(device_path=args.device_path, destination_regions=args.destinations)
     else:
         print("Unknown command: %s" % command)
         sys.exit(127) # Exit code for command not found. Script cannot run
