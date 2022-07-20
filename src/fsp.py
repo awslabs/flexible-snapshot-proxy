@@ -134,41 +134,49 @@ def write_block_to_file(file, block, data):
         f.flush()
         f.close()
 
+# Description:      Helper function to verify received checksum with received data.
+# Data path:        N/A
+# Input worker:     N/A
+# Input data:       CHUNK_SIZE worth of bytes
+# Input metadata:   received checksum, Block Metadata
+# Output:           Bool
+#
+def verify_checksum(received_checksum, block, data):
+    h = hashlib.sha256()
+    h.update(data)
+    calculated_checksum = b64encode(h.digest()).decode()
+    if received_checksum == calculated_checksum:
+        return True
+    else:
+        print ('Checksum verify for chunk', block, 'failed, retrying:', received_checksum, '!=', calculated_checksum)
+        return False
+
 # Get a Snapshot Block, verify Checksum and write it to a file.
 # Data Path: Local Memory (from try_get_block()) -> File / Block Device
 def get_block(block, ebs, files, snapshot_id):
-    h = hashlib.sha256()
     resp = try_get_block(ebs, snapshot_id, block['BlockIndex'], block['BlockToken'])
     data = resp['BlockData'].read();
-    checksum = resp['Checksum'];
-    h.update(data)
-    chksum = b64encode(h.digest()).decode()
-    if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
-        if chksum == checksum:
+    if resp['Checksum'] != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip if allowed
+        if verify_checksum(resp['Checksum'], block, data):
             for file in files:
                 write_block_to_file(file, block, data)
         else:
-            print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
             get_block(block,ebs,files,snapshot_id) # We retry indefinitely on checksum failure.
 
 # Get a Changed Block, verify Checksum and write it at the right offset.
 # Data Path: Local Memory (from try_get_block()) -> File / Block Device
 def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
-    h = hashlib.sha256()
     resp = None
     if 'SecondBlockToken' in block:
         resp = try_get_block(ebs, snapshot_id_two, block['BlockIndex'], block['SecondBlockToken'])
     else:
         resp = try_get_block(ebs, snapshot_id_one, block['BlockIndex'], block['FirstBlockToken'])
     data = resp['BlockData'].read();
-    checksum = resp['Checksum'];
-    h.update(data)
-    chksum = b64encode(h.digest()).decode()
-    if chksum == checksum:
+    # For a changed block, we **don't** want to skip sparse blocks, since we want to overwrite non-sparse with sparse if that happens.
+    if verify_checksum(resp['Checksum'], block, data):
         for file in files:
             write_block_to_file(file, block, data)
     else:
-        print ('Checksum verify for chunk',block,'failed, retrying:', block, checksum, chksum)
         get_changed_block(block, ebs, files, snapshot_id_two) # We retry indefinitely on checksum failure.
 
 # Read a Block locally, try to upload it.
