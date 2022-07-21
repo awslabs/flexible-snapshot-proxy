@@ -1,12 +1,12 @@
 """
   Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-  
+
   Licensed under the Apache License, Version 2.0 (the "License").
   You may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-  
+
       http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,9 +22,9 @@
 # Minimum requirements: 4 vCPU, 8GB RAM.
 # Recommended:          8 vCPU, 32GB RAM, dedicated network bandwidth (5Gbps min).
 #
-# The memory requirements depends on Snapshot size. A fully allocated 16TiB 
-# snapshot uses 12.4 GiB RAM for the block index, and 10-16 GiB for the 
-# parallel copy process. If the script crashes due to OOM, you can reduce 
+# The memory requirements depends on Snapshot size. A fully allocated 16TiB
+# snapshot uses 12.4 GiB RAM for the block index, and 10-16 GiB for the
+# parallel copy process. If the script crashes due to OOM, you can reduce
 # the copy memory requirement by reducing NUM_JOBS at the expense of performance.
 #
 # Benchmarked download speed vs. instance type **with** EBS VPC Endpoint:
@@ -277,14 +277,14 @@ def get_block_s3(block, ebs, s3, snapshot_prefix):
         s3.put_object(Body="", Bucket=singleton.S3_BUCKET, Key="{}/{}.{}".format(snapshot_prefix, block['BlockIndex'], h.hexdigest()))
 
 # Wrapper around get_block() that parallelizes individual get_block() retrievals.
-# Data Path: 
+# Data Path:
 def get_blocks(array, files, snapshot_id):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(delayed(get_block)(block, ebs, files, snapshot_id) for block in array)
 
 # Wrapper around get_changed_block() that parallelizes individual get_changed_block() retrievals.
-# Data Path: 
+# Data Path:
 def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
@@ -295,7 +295,7 @@ def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), 'rb+') 
+            os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), 'rb+')
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
@@ -305,7 +305,7 @@ def validate_file_paths(files):
 def validate_file_paths_read(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_RDONLY), 'rb+') 
+            os.fdopen(os.open(file, os.O_RDONLY), 'rb+')
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be read from. Please verify your file paths.\nIf you are using a device path to read from to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
@@ -337,7 +337,7 @@ def put_blocks(array, snap_id, OUTFILE, count):
         parallel2(delayed(put_block_from_file)(block, ebs, snap_id, OUTFILE, count) for block in array)
 
 # Core logic for combining Blocks into larger Segments for S3 Upload.
-# Data Path: N/A, operates on a block map and doesn't touch data.    
+# Data Path: N/A, operates on a block map and doesn't touch data.
 def chunk_and_align(array, gap = 1, offset = 64):
     result = []
     segment = []
@@ -372,7 +372,7 @@ def retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two):
     blocks = response['ChangedBlocks']
     while 'NextToken' in response:
         response = ebs.list_changed_blocks(FirstSnapshotId=snapshot_id_one, SecondSnapshotId=snapshot_id_two, NextToken = response['NextToken'])
-        blocks.extend(response['ChangedBlocks']) 
+        blocks.extend(response['ChangedBlocks'])
     return blocks
 
 # Validate whether we can read from an EBS Snapshot - i.e. is it Completed?
@@ -436,7 +436,7 @@ def validate_s3_bucket(region, check_is_read, check_is_write): #Return if user h
 
 '''
 The Functions below are wrappers exposed to main.py to be called after dependency checking and arg parsing
-Each function below will use the functions above with parallelization to complete the intended action 
+Each function below will use the functions above with parallelization to complete the intended action
 
 Each function below follows the following format:
     1. Parameter Validation
@@ -455,7 +455,7 @@ def diff(snapshot_id_one, snapshot_id_two):
     start_time = time.perf_counter()
     blocks = retrieve_differential_snapshot_blocks(snapshot_id_one, snapshot_id_two)
     print('Changes between', snapshot_id_one, 'and', snapshot_id_two, 'contain', len(blocks), 'chunks and', CHUNK_SIZE * len(blocks), 'bytes, took', round (time.perf_counter() - start_time,2), "seconds.")
-    
+
 def download(snapshot_id, file_path):
     validate_snapshot(snapshot_id)
     files = []

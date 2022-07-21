@@ -1,12 +1,12 @@
 """
   Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-  
+
   Licensed under the Apache License, Version 2.0 (the "License").
   You may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-  
+
       http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -126,7 +126,7 @@ def dependency_checker(pip_freeze_output, requirements):
         else:
             min_version = requires[package]["min"]
             max_version = requires[package]["max"]
-            
+
             # is okay?
             if ((min_version == None and max_version == None)
             or (max_version == None and version_cmp(version, min_version)  >= 0)
@@ -153,7 +153,7 @@ def install_dependencies(needs_install, needs_version_adjustment):
     for package in needs_version_adjustment:
         if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_version_adjustment[package]}']).returncode != 0:
             return False
-    
+
     for package in needs_install:
         if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_install[package]}']).returncode != 0:
             return False
@@ -174,7 +174,7 @@ def arg_parse(args):
     parser.add_argument("-vvv", default=False, action="store_true", dest="vvv", help="Maximum output verbosity. (All individual block retries will be recorded)")
     parser.add_argument("--nodeps", default=False, action="store_true", dest="nodeps", help="Do not verify/install dependencies.")
     parser.add_argument("--suppress_writes", default=False, action="store_true", help="Intended for underpowered devices. Will not write log files or check dependencies")
-    
+
     # sub_parser for each CLI action
     subparsers = parser.add_subparsers(dest='command', title='Flexible Snapshot Proxy (FSP) Commands', description='First Positional Arguments. Additional help pages (-h or --help) for each command is available')
     list_parser = subparsers.add_parser('list', help='Returns accurate size of a Snapshot by enumerating actual consumed space')
@@ -188,51 +188,51 @@ def arg_parse(args):
     getfroms3_parser = subparsers.add_parser('getfroms3', help='Transfers a Snapshot stored in a customer-owned S3 Bucket to a new EBS snapshot')
     multiclone_parser = subparsers.add_parser('multiclone', help='Same functionality as “download”, but writing to multiple destinations in parallel')
     fanout_parser = subparsers.add_parser('fanout', help='Upload from file to multiple snapshot(s), provided a list of regions')
-    
+
     # add CLI argument options for each command
     list_parser.add_argument('snapshot', help='Snapshot ID to list size of')
-    
+
     diff_parser.add_argument('snapshot_one', help='First snapshot ID to used in comparison')
     diff_parser.add_argument('snapshot_two', help='Second snapshot ID to used in comparison')
-    
+
     download_parser.add_argument('snapshot', help='Snapshot ID to download')
     download_parser.add_argument('file_path', help='File path of download location. (Absolute path preferred)')
 
     deltadownload_parser.add_argument('snapshot_one', help='First snapshot ID to used in comparison')
     deltadownload_parser.add_argument('snapshot_two', help='Second snapshot ID to used in comparison')
     deltadownload_parser.add_argument('file_path', help='File path of download location. (Absolute path preferred)')
-    
+
     upload_parser.add_argument('file_path', help='File path of file or raw device to upload as snapshot')
-    
+
     copy_parser.add_argument('snapshot', help='Snapshot ID to be copied')
     copy_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where snapshot will copied to. (default: source region)")
-    
+
     sync_parser.add_argument('snapshot_one', help='First snapshot ID to be synced (must share a parent snapshot with snapshotTwo)')
     sync_parser.add_argument('snapshot_two', help='Second snapshot ID to be synced (must share a parent snapshot with snapshotOne)')
     sync_parser.add_argument('destination_snapshot', help='The snapshot to synchronize')
     sync_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where the destination snapshot exits. (default: source region)")
     sync_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
-    
+
     movetos3_parser.add_argument('snapshot', help='Snapshot ID to be moved into an s3 bucket')
     movetos3_parser.add_argument('s3Bucket', help='The s3 bucket destination. Must be created within your AWS account')
     movetos3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where target s3 bucket exists. (default: source region)")
     movetos3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     movetos3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
     movetos3_parser.add_argument("-p", "--profile", default="default", help="Use a different AWS CLI profile, for custom destinations such as Snowball Edge.")
-    
+
     getfroms3_parser.add_argument('snapshot_prefix', help='The snapshot prefix specifying which snapshot to retrieve from s3 bucket')
     getfroms3_parser.add_argument('s3Bucket', help='The s3 bucket source. Must be created within your AWS account')
     getfroms3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Region where retrieved snapshot will exist. (default: source region)")
     getfroms3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     getfroms3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
     getfroms3_parser.add_argument("-p", "--profile", default="default", help="Use a different AWS CLI profile, for custom destinations such as Snowball Edge.")
-    
+
     multiclone_parser.add_argument('snapshot', help='Snapshot ID to multiclone')
     multiclone_parser.add_argument('file_path', help='File path to a .txt file containing list of multiclone destinations')
 
     fanout_parser.add_argument('device_path', help='File path to raw device for fanout snapshot distributution')
     fanout_parser.add_argument('destinations', help='File path to a .txt file listing all regions the snapshot distributution on separate lines')
-    
+
     args = parser.parse_args(args)
     return args
 
@@ -265,24 +265,24 @@ def setup_singleton(args):
     aws_origin_region = args.origin_region
     if not (boto3.session.Session().region_name is None):
         aws_origin_region = boto3.session.Session().region_name
-    
+
     if 'destination_region' in args and not (args.destination_region is None):
         aws_destination_region = args.destination_region
     else:
         aws_destination_region = aws_origin_region
 
-    num_jobs = 0 
+    num_jobs = 0
     if aws_origin_region == aws_destination_region:
         num_jobs = 16 # Snapshot gets split into N chunks, each of which is processed using N threads. Total complexity N^2.
     else:
         num_jobs = 27 # Increase concurrency for cross-region copies for better bandwidth.
-                    # The value of 27 has been chosen because we appear to load-balance across 3 endpoints, so makes sense to use power of 3. 
-                    # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo. 
+                    # The value of 27 has been chosen because we appear to load-balance across 3 endpoints, so makes sense to use power of 3.
+                    # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo.
 
     full_copy =  False
     if 'full_copy' in args:
         full_copy = args.full_copy
-    
+
     s3_bucket = None
     if 's3Bucket' in args:
         s3_bucket = args.s3Bucket
@@ -313,7 +313,7 @@ def setup_singleton(args):
         return None
     if len(aws_regions_list) == 0:
         return None
-    
+
     origin_is_valid = False
     destination_is_valid = False
     region_set = set()
@@ -409,7 +409,7 @@ if __name__ == "__main__":
                         print(f"\t\t{package}")
                     else:
                         print(f"\t\t{package}=={needs_version_adjustment[package]}")
-            
+
             choice = input("\nAgree to these changes? (y/n): ").strip()
             if choice == "y" or choice == "Y":
                 if install_dependencies(needs_install, needs_version_adjustment) == False:
@@ -425,9 +425,9 @@ if __name__ == "__main__":
         if exists(timestamp_file):
             os.remove(timestamp_file)
         open(timestamp_file, "a").close() # Create the timestamp file to cache dependencies check for 1 week
-        
+
         print("Dependencies \U00002705") # unicode for GREEN CHECK
-    
+
     setup_singleton(args)
 
     #Placing these imports earlier creates a circular dependency with the installer
@@ -436,10 +436,10 @@ if __name__ == "__main__":
     command = args.command
     if command == "list":
         list(snapshot_id=args.snapshot)
-        
+
     elif command == "diff":
         diff(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two)
-        
+
     elif command == "download":
         download(snapshot_id=args.snapshot, file_path=args.file_path)
 
@@ -448,30 +448,30 @@ if __name__ == "__main__":
 
     elif command == "upload":
         upload(file_path=args.file_path)
-        
+
     elif command == "copy":
         copy(snapshot_id=args.snapshot)
-        
+
     elif command == "sync":
         sync(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two, destination_snapshot=args.destination_snapshot)
-        
+
     elif command == "movetos3":
         if not (args.endpoint_url is None):
             singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
         if not (args.endpoint_url is None):
             singleton.AWS_S3_PROFILE = args.profile
         movetos3(snapshot_id=args.snapshot)
-        
+
     elif command == "getfroms3":
         if not (args.endpoint_url is None):
             singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
         if not (args.endpoint_url is None):
             singleton.AWS_S3_PROFILE = args.profile
         getfroms3(snapshot_prefix=args.snapshot_prefix)
-        
+
     elif command == "multiclone":
         multiclone(snapshot_id=args.snapshot, infile=args.file_path)
-        
+
     elif command == "fanout":
         fanout(device_path=args.device_path, destination_regions=args.destinations)
     else:

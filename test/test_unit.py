@@ -1,12 +1,12 @@
 """
   Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-  
+
   Licensed under the Apache License, Version 2.0 (the "License").
   You may not use this file except in compliance with the License.
   You may obtain a copy of the License at
-  
+
       http://www.apache.org/licenses/LICENSE-2.0
-  
+
   Unless required by applicable law or agreed to in writing, software
   distributed under the License is distributed on an "AS IS" BASIS,
   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -136,8 +136,8 @@ class PackageVersionCMP(unittest.TestCase):
     self.assertTrue(version_cmp(v1,v2) > 0, f"version_cmp({v1},{v2}) should return > 0 not {version_cmp(v1,v2)}")
 
 class DependencyCheckAndInstall(unittest.TestCase):
-  requirements = ['aws-shell>=0.2.2', 'boto3>=1.24.22', 'botocore>=1.27.25', 
-  'joblib>=1.1.0', 'numpy>=1.21.6', 'ruamel.yaml>=0.17.21', 'ruamel.yaml.clib>=0.2.6', 
+  requirements = ['aws-shell>=0.2.2', 'boto3>=1.24.22', 'botocore>=1.27.25',
+  'joblib>=1.1.0', 'numpy>=1.21.6', 'ruamel.yaml>=0.17.21', 'ruamel.yaml.clib>=0.2.6',
   'urllib3>=1.26.9', 'zstandard>0,<0.18.0']
   curr_pip3_packages = []
 
@@ -160,12 +160,12 @@ class DependencyCheckAndInstall(unittest.TestCase):
     for p in self.package_names:
       self.assertTrue((p in needs_install), "Not all required dependencies found in install list.")
       counter += 1
-    
+
     self.assertEqual(counter, 9, "On Fresh Install, Not all required packages would've been installed.")
 
   def all_installed(self):
-    mock_pip_freeze = ['aws-shell==0.2.2', 'boto3==1.24.22', 'botocore==1.27.25', 
-    'joblib==1.1.0', 'numpy==1.21.6', 'ruamel.yaml==0.17.21', 'ruamel.yaml.clib==0.2.6', 
+    mock_pip_freeze = ['aws-shell==0.2.2', 'boto3==1.24.22', 'botocore==1.27.25',
+    'joblib==1.1.0', 'numpy==1.21.6', 'ruamel.yaml==0.17.21', 'ruamel.yaml.clib==0.2.6',
     'urllib3==1.26.9', 'zstandard==0.18.0']
     needs_install, needs_version_adjustment = dependency_checker(mock_pip_freeze, self.requirements)
 
@@ -179,7 +179,7 @@ class DependencyCheckAndInstall(unittest.TestCase):
     to upgrade: 'aws-shell==0.2.2', 'zstandard==0.18.0'
     all good: 'joblib==1.1.0', 'ruamel.yaml==0.17.21', 'ruamel.yaml.clib==0.2.6', 'urllib3==1.26.9'
     '''
-    mock_pip_freeze = ['aws-shell==0.2.1', 'joblib==1.1.0', 'ruamel.yaml==0.17.21', 
+    mock_pip_freeze = ['aws-shell==0.2.1', 'joblib==1.1.0', 'ruamel.yaml==0.17.21',
     'ruamel.yaml.clib==0.2.6', 'urllib3==1.26.9', 'zstandard==0.19.0']
 
     needs_install, needs_version_adjustment = dependency_checker(mock_pip_freeze, self.requirements)
@@ -213,8 +213,8 @@ def DependencyCheckerSuite():
   suite.addTest(PackageVersionCMP('v2_shorter_same'))
   suite.addTest(PackageVersionCMP('v2_shorter_greater'))
 
-  suite.addTest(DependencyCheckAndInstall('fresh_install')) 
-  suite.addTest(DependencyCheckAndInstall('all_installed')) 
+  suite.addTest(DependencyCheckAndInstall('fresh_install'))
+  suite.addTest(DependencyCheckAndInstall('all_installed'))
   suite.addTest(DependencyCheckAndInstall('mix_in_to_install_to_update_and_some_satisfied'))
 
   return suite
