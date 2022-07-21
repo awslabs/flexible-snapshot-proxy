@@ -158,7 +158,7 @@ def verify_checksum(received_checksum, block, data):
 # Data Path: Local Memory (from try_get_block()) -> File / Block Device
 def get_block(block, ebs, files, snapshot_id):
     resp = try_get_block(ebs, snapshot_id, block['BlockIndex'], block['BlockToken'])
-    data = resp['BlockData'].read();
+    data = resp['BlockData'].read()
     if resp['Checksum'] != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip if allowed
         if verify_checksum(resp['Checksum'], block, data):
             for file in files:
@@ -174,7 +174,7 @@ def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
         resp = try_get_block(ebs, snapshot_id_two, block['BlockIndex'], block['SecondBlockToken'])
     else:
         resp = try_get_block(ebs, snapshot_id_one, block['BlockIndex'], block['FirstBlockToken'])
-    data = resp['BlockData'].read();
+    data = resp['BlockData'].read()
     # For a changed block, we **don't** want to skip sparse blocks, since we want to overwrite non-sparse with sparse if that happens.
     if verify_checksum(resp['Checksum'], block, data):
         for file in files:
@@ -226,7 +226,7 @@ def put_segments_to_s3(snapshot_id, array, volume_size, s3bucket):
     s3 = session.client('s3', region_name=singleton.AWS_DEST_REGION, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
     h = hashlib.sha256()
     data = bytearray()
-    offset = array[0]['BlockIndex'];
+    offset = array[0]['BlockIndex']
     for block in array:
         resp = try_get_block(ebs, snapshot_id, block['BlockIndex'], block['BlockToken'])
         data += resp['BlockData'].read()
@@ -263,8 +263,8 @@ def get_segment_from_s3(object, snap, count):
 def get_block_s3(block, ebs, s3, snapshot_prefix):
     h = hashlib.sha256()
     resp = try_get_block(ebs, snapshot_prefix, block['BlockIndex'], block['BlockToken'])
-    data = resp['BlockData'].read();
-    checksum = resp['Checksum'];
+    data = resp['BlockData'].read()
+    checksum = resp['Checksum']
     h.update(data)
     chksum = b64encode(h.digest()).decode()
     if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY: ## Known sparse block checksum we can skip
@@ -325,7 +325,7 @@ def copy_block_to_snap(command, snapshot, block, ebs, ebs2, snap, count):
         resp = try_get_block(ebs, snapshot, block['BlockIndex'], block['BlockToken'])
     elif command == 'sync':
         resp = try_get_block(ebs, snapshot, block['BlockIndex'], block['SecondBlockToken'])
-    data = resp['BlockData'].read();
+    data = resp['BlockData'].read()
     checksum = b64encode(hashlib.sha256(data).digest()).decode()
     try_put_block(ebs2, block['BlockIndex'], snap['SnapshotId'], data, checksum, count)
 
@@ -410,11 +410,11 @@ def validate_s3_bucket(region, check_is_read, check_is_write): #Return if user h
                 found = True
                 if grant['Permission'] == 'FULL_CONTROL':
                     break # Valid!
-                if check_is_read == True and not (grant['Permission'] == 'READ'):
+                if check_is_read == True and not grant['Permission'] == 'READ':
                     print(f"s3 bucket {singleton.S3_BUCKET} does not not have read permissions for user {singleton.AWS_CANONICAL_USER_ID}")
                     valid = False
                     break
-                if check_is_write == True and not (grant['Permission'] == 'WRITE'):
+                if check_is_write == True and not grant['Permission'] == 'WRITE':
                     print(f"s3 bucket {singleton.S3_BUCKET} does not not have write permissions for user {singleton.AWS_CANONICAL_USER_ID}")
                     valid = False
                     break

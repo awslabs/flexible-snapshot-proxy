@@ -44,9 +44,8 @@ class SingletonClass(object):
     """Global Variables for getfroms3 and movetos3"""
     AWS_S3_ENDPOINT_URL = None
     AWS_S3_PROFILE = None
-    
+
     def __new__(cls):
       if not hasattr(cls, 'instance'):
         cls.instance = super(SingletonClass, cls).__new__(cls)
       return cls.instance
-

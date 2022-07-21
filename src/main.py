@@ -106,7 +106,7 @@ def dependency_checker(pip_freeze_output, requirements):
     for line in pip_freeze_output:
         package = ""
         version = None
-        if not ("==" in line): #No version packages. Odd but possible
+        if not "==" in line: #No version packages. Odd but possible
             package = line.split(' ', 1)[0]
         else:
             package, version = tuple(line.split("==", 1))
@@ -252,21 +252,21 @@ def setup_singleton(args):
 
     user_canonical_id = ''
     try:
-            session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
-            s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
-            user_canonical_id = s3.list_buckets()['Owner']['ID']
+        session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+        s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
+        user_canonical_id = s3.list_buckets()['Owner']['ID']
     except s3.exceptions as e:
-            print("Error: Could not get canonical user id")
-            print(e)
-            return None
+        print("Error: Could not get canonical user id")
+        print(e)
+        return None
 
 
     #Find aws regions
     aws_origin_region = args.origin_region
-    if not (boto3.session.Session().region_name is None):
+    if not boto3.session.Session().region_name is None:
         aws_origin_region = boto3.session.Session().region_name
 
-    if 'destination_region' in args and not (args.destination_region is None):
+    if 'destination_region' in args and not args.destination_region is None:
         aws_destination_region = args.destination_region
     else:
         aws_destination_region = aws_origin_region
@@ -456,16 +456,16 @@ if __name__ == "__main__":
         sync(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two, destination_snapshot=args.destination_snapshot)
 
     elif command == "movetos3":
-        if not (args.endpoint_url is None):
+        if not args.endpoint_url is None:
             singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
-        if not (args.endpoint_url is None):
+        if not args.endpoint_url is None:
             singleton.AWS_S3_PROFILE = args.profile
         movetos3(snapshot_id=args.snapshot)
 
     elif command == "getfroms3":
-        if not (args.endpoint_url is None):
+        if not args.endpoint_url is None:
             singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
-        if not (args.endpoint_url is None):
+        if not args.endpoint_url is None:
             singleton.AWS_S3_PROFILE = args.profile
         getfroms3(snapshot_prefix=args.snapshot_prefix)
 
