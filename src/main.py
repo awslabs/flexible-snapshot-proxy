@@ -223,7 +223,9 @@ def arg_parse(args):
     getfroms3_parser.add_argument('snapshot_prefix', help='The snapshot prefix specifying which snapshot to retrieve from s3 bucket')
     getfroms3_parser.add_argument('s3Bucket', help='The s3 bucket source. Must be created within your AWS account')
     getfroms3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Region where retrieved snapshot will exist. (default: source region)")
+    getfroms3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     getfroms3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
+    getfroms3_parser.add_argument("-p", "--profile", default="default", help="Use a different AWS CLI profile, for custom destinations such as Snowball Edge.")
     
     multiclone_parser.add_argument('snapshot', help='Snapshot ID to multiclone')
     multiclone_parser.add_argument('file_path', help='File path to a .txt file containing list of multiclone destinations')
@@ -250,8 +252,9 @@ def setup_singleton(args):
 
     user_canonical_id = ''
     try:
-        s3 = boto3.client('s3')
-        user_canonical_id = s3.list_buckets()['Owner']['ID']
+            session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+            s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
+            user_canonical_id = s3.list_buckets()['Owner']['ID']
     except s3.exceptions as e:
             print("Error: Could not get canonical user id")
             print(e)
@@ -460,6 +463,10 @@ if __name__ == "__main__":
         movetos3(snapshot_id=args.snapshot)
         
     elif command == "getfroms3":
+        if not (args.endpoint_url is None):
+            singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
+        if not (args.endpoint_url is None):
+            singleton.AWS_S3_PROFILE = args.profile
         getfroms3(snapshot_prefix=args.snapshot_prefix)
         
     elif command == "multiclone":

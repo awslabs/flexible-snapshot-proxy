@@ -53,6 +53,7 @@ from base64 import b64encode, urlsafe_b64encode
 from joblib import Parallel, delayed
 from multiprocessing import Manager
 from urllib.error import HTTPError
+from botocore.exceptions import ClientError
 
 #Import project scoped vars
 from singleton import SingletonClass #Project Scoped Global Vars
@@ -212,7 +213,8 @@ def put_block_from_file_fanout(block, source, f, ebsclient_snaps):
 # Data Path: S3 -> Local
 def get_blocks_s3(array, snapshot_prefix):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
-    s3 = boto3.client('s3', region_name=singleton.AWS_ORIGIN_REGION)
+    session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+    s3 = session.client('s3', region_name=singleton.AWS_ORIGIN_REGION, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(delayed(get_block_s3)(block, ebs, s3, snapshot_prefix) for block in array)
 
@@ -241,7 +243,8 @@ def put_segments_fanout(array, source, f, ebsclient_snaps):
 # Data Path: S3 -> Local Memory -> EBS Snapshot (via try_put_block())
 def get_segment_from_s3(object, snap, count):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
-    s3 = boto3.client('s3', region_name=singleton.AWS_ORIGIN_REGION)
+    session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+    s3 = session.client('s3', region_name=singleton.AWS_ORIGIN_REGION, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
     h = hashlib.sha256()
     response = s3.get_object(Bucket=singleton.S3_BUCKET, Key=object['Key'])
     name = object['Key'].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
@@ -395,10 +398,12 @@ def validate_snapshot(snapshot_id, region=singleton.AWS_ORIGIN_REGION): #Return 
 def validate_s3_bucket(region, check_is_read, check_is_write): #Return if user has all required permissions on the bucket. Otherwise Invalid
     valid = True
     try:
-        s3 = boto3.client('s3', region_name=region)
-        response = s3.get_bucket_acl(
-            Bucket=singleton.S3_BUCKET
-        )['Grants']
+        session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+        s3 = session.client('s3', region_name=region, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
+        try:
+            response = s3.get_bucket_acl(Bucket=singleton.S3_BUCKET)['Grants']
+        except ClientError as e: # Some S3 implementations don't support GetBucketAcl(), in that case ignore and hope we can continue.
+            return
         found = False
         for grant in response:
             if grant['Grantee']['ID'] == singleton.AWS_CANONICAL_USER_ID:
@@ -564,7 +569,8 @@ def movetos3(snapshot_id):
 def getfroms3(snapshot_prefix):
     validate_s3_bucket(singleton.AWS_DEST_REGION, True, False)
     start_time = time.perf_counter()
-    s3 = boto3.client('s3', region_name=singleton.AWS_ORIGIN_REGION)
+    session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+    s3 = session.client('s3', region_name=singleton.AWS_ORIGIN_REGION, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
     ebs = boto3.client('ebs', region_name=singleton.AWS_DEST_REGION)
     response = s3.list_objects_v2(Bucket=singleton.S3_BUCKET, Prefix=snapshot_prefix)
     objects = response['Contents']
