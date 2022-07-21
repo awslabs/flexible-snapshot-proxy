@@ -54,7 +54,9 @@ from joblib import Parallel, delayed
 from multiprocessing import Manager
 from urllib.error import HTTPError
 
-import singleton
+#Import project scoped vars
+from singleton import SingletonClass #Project Scoped Global Vars
+singleton = SingletonClass()
 
 # Global Constants
 CHUNK_SIZE = 1024 * 512
@@ -218,7 +220,8 @@ def get_blocks_s3(array, snapshot_prefix):
 # Data Path:  -> S3
 def put_segments_to_s3(snapshot_id, array, volume_size, s3bucket):
     ebs = boto3.client('ebs', region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
-    s3 = boto3.client('s3', region_name=singleton.AWS_DEST_REGION)
+    session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+    s3 = session.client('s3', region_name=singleton.AWS_DEST_REGION, endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
     h = hashlib.sha256()
     data = bytearray()
     offset = array[0]['BlockIndex'];
