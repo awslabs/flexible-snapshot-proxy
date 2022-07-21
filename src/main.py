@@ -15,14 +15,13 @@
 """
 
 import argparse
-from contextlib import suppress
 import os.path
 import subprocess
 import sys
 from os.path import exists
 from datetime import datetime, timedelta
 
-import singleton #Project Scoped Global Vars
+from singleton import SingletonClass #Project Scoped Global Vars
 
 """
 Works like java comparator
@@ -167,7 +166,7 @@ Creates parsers and enforces valid global parameter choices. Returns None if FSP
 def arg_parse(args):
     # Highest level parser
     parser = argparse.ArgumentParser(description='Flexible Snapshot Proxy (FSP) CLI.')
-    parser.add_argument("-o", "--origin_region", default=None, help="AWS Origin Region - source of Snapshots. (default: .aws/config then us-east-1)")
+    parser.add_argument("-o", "--origin_region", default="us-east-1", help="AWS Origin Region - source of Snapshots. (default: .aws/config then us-east-1)")
     parser.add_argument("-d", "--dry_run", default=False, action="store_true", help="Perform a dry run of FSP operation to check valid AWS permissions. (default: false)")
     parser.add_argument("-q", "--quiet", default=False, action="store_true", dest="q", help="Quiet output.")
     parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="Output verbosity. (Pass/Fail blocks per region)")
@@ -206,7 +205,7 @@ def arg_parse(args):
     upload_parser.add_argument('file_path', help='File path of file or raw device to upload as snapshot')
     
     copy_parser.add_argument('snapshot', help='Snapshot ID to be copied')
-    copy_parser.add_argument("-d", "--destination_region", required=False, default=None, help="AWS Destination Region. Where snapshot will copied to. (default: source region)")
+    copy_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where snapshot will copied to. (default: source region)")
     
     sync_parser.add_argument('snapshot_one', help='First snapshot ID to be synced (must share a parent snapshot with snapshotTwo)')
     sync_parser.add_argument('snapshot_two', help='Second snapshot ID to be synced (must share a parent snapshot with snapshotOne)')
@@ -216,8 +215,10 @@ def arg_parse(args):
     
     movetos3_parser.add_argument('snapshot', help='Snapshot ID to be moved into an s3 bucket')
     movetos3_parser.add_argument('s3Bucket', help='The s3 bucket destination. Must be created within your AWS account')
-    movetos3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where destination s3 bucket exists. (default: source region)")
+    movetos3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where target s3 bucket exists. (default: source region)")
+    movetos3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     movetos3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
+    movetos3_parser.add_argument("-p", "--profile", default="default", help="Use a different AWS CLI profile, for custom destinations such as Snowball Edge.")
     
     getfroms3_parser.add_argument('snapshot_prefix', help='The snapshot prefix specifying which snapshot to retrieve from s3 bucket')
     getfroms3_parser.add_argument('s3Bucket', help='The s3 bucket source. Must be created within your AWS account')
@@ -259,17 +260,13 @@ def setup_singleton(args):
 
     #Find aws regions
     aws_origin_region = args.origin_region
-    if aws_origin_region == None:
-        if boto3.session.Session().region_name is None:
-            aws_origin_region = "us-east-1" # we assume us-east-1 if region is not configured in aws cli.
-        else:
-            aws_origin_region = boto3.session.Session().region_name
+    if not (boto3.session.Session().region_name is None):
+        aws_origin_region = boto3.session.Session().region_name
     
-    if 'destination_region' in args and args.destination_region != None:
+    if 'destination_region' in args and not (args.destination_region is None):
         aws_destination_region = args.destination_region
     else:
         aws_destination_region = aws_origin_region
-
 
     num_jobs = 0 
     if aws_origin_region == aws_destination_region:
@@ -344,7 +341,6 @@ def setup_singleton(args):
     args.destinations = aws_regions_fanout
 
     #Configure Global Vars
-    singleton.init()
     singleton.AWS_ACCOUNT_ID = user_account
     singleton.AWS_USER_ID = user_id
     singleton.AWS_CANONICAL_USER_ID = user_canonical_id
@@ -359,6 +355,8 @@ def setup_singleton(args):
     singleton.SUPPRESS_WRITES = suppress_writes
 
 if __name__ == "__main__":
+    global singleton
+    singleton = SingletonClass()
     args = arg_parse(sys.argv[1:])
 
     if args == None:
@@ -455,6 +453,10 @@ if __name__ == "__main__":
         sync(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two, destination_snapshot=args.destination_snapshot)
         
     elif command == "movetos3":
+        if not (args.endpoint_url is None):
+            singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
+        if not (args.endpoint_url is None):
+            singleton.AWS_S3_PROFILE = args.profile
         movetos3(snapshot_id=args.snapshot)
         
     elif command == "getfroms3":
