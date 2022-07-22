@@ -1,0 +1,19 @@
+# The Purpose of this github Action is to automate and create records of checks that should exist for any pull request.
+# This is completed by running checks and if successful, creating an appropriate pull request + notification in slack feed
+
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    # LINTER JOB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      
+      - name: Super-Linter
+        uses: github/super-linter/slim@v4.9.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
