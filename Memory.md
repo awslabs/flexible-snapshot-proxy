@@ -1,3 +1,5 @@
+# Notes on Memory Utilization
+
 The memory utilization of flexible-snapshot-proxy depends on several factors - type of command, size of instance, and size of snapshot/volume. It is designed to auto-scale the concurrency based on available resources and spread the workload across many child processes and threads, with each child typically consuming a fixed amount of memory for large data movement operations.
 
 This is a breakdown of operations by type, and profiled requirements for each type.
@@ -20,7 +22,7 @@ Building the index is a single-threaded operation. An example of memory utilizat
 
 In practical terms, considering the recommendations outlined in the flexible-snapshot-proxy comment block and typical system memory amounts, a system with 8GB of memory should be able to list a 10 TiB allocated snapshot, and 16 GiB of memory is optimal for listing 16 TiB snapshots. This part scales linearly, so to handle a 64TiB allocated snapshot from an io2 Block Express volume (64 TiB is the maximum volume size supported today), you will need over 48 GiB of memory, and therefore should use a system with 64 GiB or more.
 
-Once the list/diff is complete, additional memory is needed to perform further operations on the snapshots. 
+Once the list/diff is complete, additional memory is needed to perform further operations on the snapshots.
 
 After the index is built, it is split into a number of segments that depends on the NUM_JOBS tuneable, which controls concurrency everywhere in the tool. By default, it's split into 16 segments for same-region operations, and 27 segments for cross-region operations, with the extra concurrency for cross-region operations required to achieve maximum throughput. Its value should be a power of 2, a power of 3, or a combination of the two (e.g. 3 * 2 ^ 3 = 24).
 

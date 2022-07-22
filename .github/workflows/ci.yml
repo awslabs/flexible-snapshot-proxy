@@ -12,8 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      
+
       - name: Super-Linter
-        uses: github/super-linter/slim@v4.9.4
+        uses: github/super-linter/slim@v4.9.4 # Notes on how to configure here: https://github.com/github/super-linter
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: main
+          DISABLE_ERRORS: true # Linter will not cause a failure, just report how to clean the files
+          VALIDATE_ALL_CODEBASE: false # Linter will only check the diff

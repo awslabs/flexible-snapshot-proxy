@@ -21,7 +21,7 @@ import sys
 from os.path import exists
 from datetime import datetime, timedelta
 
-from singleton import SingletonClass #Project Scoped Global Vars
+from singleton import SingletonClass  #Project Scoped Global Vars
 
 """
 Works like java comparator
@@ -29,6 +29,8 @@ v1 < v2 => return < 0
 v1 == v2 => return == 0
 v1 > v2 => return > 0
 """
+
+
 def version_cmp(v1, v2):
     v1_t = tuple()
     v2_t = tuple()
@@ -40,10 +42,10 @@ def version_cmp(v1, v2):
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
     i = len(v1_t) - len(v2_t)
     if i < 0:
-        zeros = -i*(0,)
+        zeros = -i * (0,)
         v1_t += zeros
     elif i > 0:
-        zeros = i*(0,)
+        zeros = i * (0,)
         v2_t += zeros
 
     less_than = v1_t <= v2_t
@@ -56,7 +58,8 @@ def version_cmp(v1, v2):
     else:
         return 1
 
-'''
+
+"""
 TO CONTROL PACKAGE VERSIONS. EACH LINE IN ../requirements.txt CAN TAKE ON ONE OF THE FOLLOWING FORMS:
 
 Case    Requirement	    Description
@@ -67,17 +70,17 @@ Case    Requirement	    Description
 5       foo>5	        foo-5 or greater, including minor and patch
 6       foo>5,<5.7	    foo-5 or greater, but less than foo-5.7
 7       foo>0,<5.7	    any foo version less than foo-5.7
-'''
+"""
 
 def dependency_checker(pip_freeze_output, requirements):
-    requires = {} # Mapping <Package_Name>: {Min: XX.XX.XX or None, Max: XX.XX.XX or None} N.B. Version numbers are both inclusive
+    requires = {}  # Mapping <Package_Name>: {Min: XX.XX.XX or None, Max: XX.XX.XX or None} N.B. Version numbers are both inclusive
 
     # Mapping <Package_Name> |-> <Version_Number>
     to_install = {}
     to_fix_version = {}
 
     for line in requirements:
-        if len(line.strip()) == 0: #Blank lines
+        if len(line.strip()) == 0:
             continue
 
         # Case 2, 3
@@ -89,7 +92,7 @@ def dependency_checker(pip_freeze_output, requirements):
             package, version = tuple(line.split("==", 1))
             requires[package.strip()] = {"min": version.strip(), "max": version.strip()}
         # Case 5
-        elif ((">" in line) and (not "," in line)):
+        elif (">" in line) and (not "," in line):
             package, version = tuple(line.split(">", 1))
             requires[package.strip()] = {"min": version.strip(), "max": None}
         # Case 6 & 7
@@ -106,8 +109,8 @@ def dependency_checker(pip_freeze_output, requirements):
     for line in pip_freeze_output:
         package = ""
         version = None
-        if not "==" in line: #No version packages. Odd but possible
-            package = line.split(' ', 1)[0]
+        if not "==" in line:  #No version packages. Odd but possible
+            package = line.split(" ", 1)[0]
         else:
             package, version = tuple(line.split("==", 1))
             package.strip()
@@ -128,9 +131,14 @@ def dependency_checker(pip_freeze_output, requirements):
             max_version = requires[package]["max"]
 
             # is okay?
-            if ((min_version == None and max_version == None)
-            or (max_version == None and version_cmp(version, min_version)  >= 0)
-            or ((version_cmp(version, min_version)  >= 0) and (version_cmp(version, max_version)  <= 0))):
+            if (
+                (min_version is None and max_version is None)
+                or (max_version is None and version_cmp(version, min_version)  >= 0)
+                or (
+                    (version_cmp(version, min_version)  >= 0)
+                    and (version_cmp(version, max_version)  <= 0)
+                )
+            ):
                 del requires[package]
                 continue
             else:
@@ -151,18 +159,34 @@ def dependency_checker(pip_freeze_output, requirements):
 def install_dependencies(needs_install, needs_version_adjustment):
     print("Fixing Required Dependencies...")
     for package in needs_version_adjustment:
-        if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_version_adjustment[package]}']).returncode != 0:
+        if subprocess.run(
+            [
+                "pip3",
+                "install",
+                "-q",
+                "--no-input",
+                f"{package}=={needs_version_adjustment[package]}"
+            ]
+        ).returncode != 0:
             return False
 
     for package in needs_install:
-        if subprocess.run(['pip3', 'install', '-q', '--no-input', f'{package}=={needs_install[package]}']).returncode != 0:
+        if subprocess.run(
+            [
+                "pip3",
+                "install",
+                "-q",
+                "--no-input",
+                f"{package}=={needs_install[package]}"
+            ]
+        ).returncode != 0:
             return False
 
     return True
 
-'''
-Creates parsers and enforces valid global parameter choices. Returns None if FSP should abort
-'''
+
+# Creates parsers and enforces valid global parameter choices. Returns None if FSP should abort
+
 def arg_parse(args):
     # Highest level parser
     parser = argparse.ArgumentParser(description='Flexible Snapshot Proxy (FSP) CLI.')
@@ -214,14 +238,14 @@ def arg_parse(args):
     sync_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
 
     movetos3_parser.add_argument('snapshot', help='Snapshot ID to be moved into an s3 bucket')
-    movetos3_parser.add_argument('s3Bucket', help='The s3 bucket destination. Must be created within your AWS account')
+    movetos3_parser.add_argument("s3Bucket", help='The s3 bucket destination. Must be created within your AWS account')
     movetos3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where target s3 bucket exists. (default: source region)")
     movetos3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     movetos3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
     movetos3_parser.add_argument("-p", "--profile", default="default", help="Use a different AWS CLI profile, for custom destinations such as Snowball Edge.")
 
     getfroms3_parser.add_argument('snapshot_prefix', help='The snapshot prefix specifying which snapshot to retrieve from s3 bucket')
-    getfroms3_parser.add_argument('s3Bucket', help='The s3 bucket source. Must be created within your AWS account')
+    getfroms3_parser.add_argument("s3Bucket", help='The s3 bucket source. Must be created within your AWS account')
     getfroms3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Region where retrieved snapshot will exist. (default: source region)")
     getfroms3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     getfroms3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
@@ -237,54 +261,54 @@ def arg_parse(args):
     return args
 
 def setup_singleton(args):
-    import boto3 # Safe since this import is not reached unless dependency check passes.
-    user_account = ''
-    user_id = ''
+    import boto3  # Safe since this import is not reached unless dependency check passes.
+    user_account = ""
+    user_id = ""
     try:
-        sts = boto3.client('sts')
-        user_account = sts.get_caller_identity().get('Account')
-        user_id = sts.get_caller_identity().get('UserId')
+        sts = boto3.client("sts")
+        user_account = sts.get_caller_identity().get("Account")
+        user_id = sts.get_caller_identity().get("UserId")
     except sts.exceptions as e:
         print("Can not get AWS user account. Is your AWS CLI Configured?")
         print("Try running: aws configure")
         print(e)
         return None
 
-    user_canonical_id = ''
+    user_canonical_id = ""
     try:
         session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
         s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
-        user_canonical_id = s3.list_buckets()['Owner']['ID']
+        user_canonical_id = s3.list_buckets()["Owner"]["ID"]
     except s3.exceptions as e:
         print("Error: Could not get canonical user id")
         print(e)
         return None
 
-
-    #Find aws regions
+    # Find aws regions
     aws_origin_region = args.origin_region
     if not boto3.session.Session().region_name is None:
         aws_origin_region = boto3.session.Session().region_name
 
-    if 'destination_region' in args and not args.destination_region is None:
+    if "destination_region" in args and not args.destination_region is None:
         aws_destination_region = args.destination_region
     else:
         aws_destination_region = aws_origin_region
 
     num_jobs = 0
     if aws_origin_region == aws_destination_region:
-        num_jobs = 16 # Snapshot gets split into N chunks, each of which is processed using N threads. Total complexity N^2.
+        num_jobs = 16  # Snapshot gets split into N chunks, each of which is processed using N threads. Total complexity N^2.
     else:
-        num_jobs = 27 # Increase concurrency for cross-region copies for better bandwidth.
-                    # The value of 27 has been chosen because we appear to load-balance across 3 endpoints, so makes sense to use power of 3.
-                    # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo.
+        # Increase concurrency for cross-region copies for better bandwidth.
+        # The value of 27 has been chosen because we appear to load-balance across 3 endpoints, so makes sense to use power of 3.
+        # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo.
+        num_jobs = 27
 
     full_copy =  False
-    if 'full_copy' in args:
+    if "full_copy" in args:
         full_copy = args.full_copy
 
     s3_bucket = None
-    if 's3Bucket' in args:
+    if "s3Bucket" in args:
         s3_bucket = args.s3Bucket
 
     verbosity = 0
@@ -304,7 +328,7 @@ def setup_singleton(args):
     # Validation of aws regions.
     aws_regions_list = []
     try:
-        ec2 = boto3.client('ec2')
+        ec2 = boto3.client("ec2")
         rsp = ec2.describe_regions()["Regions"]
         for region in rsp:
             aws_regions_list.append(region["RegionName"])
@@ -323,13 +347,13 @@ def setup_singleton(args):
             origin_is_valid = True
         if region == aws_destination_region:
             destination_is_valid = True
-    if not (origin_is_valid==True and destination_is_valid==True):
+    if not (origin_is_valid == True and destination_is_valid == True):
         print("Invalid AWS region name(s) were provided")
         return None
 
-    #Validate fanout regions
+    # Validate fanout regions
     aws_regions_fanout = []
-    if args.command == 'fanout':
+    if args.command == "fanout":
         f = open(args.destinations, 'r')
         for region in f:
             region = region.strip()
@@ -339,11 +363,11 @@ def setup_singleton(args):
                 aws_regions_fanout.append(region)
             else:
                 print("Fanout - invalid AWS region name:", region)
-                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+                sys.exit(1)  # Exit code for invalid parameters. Script cannot run
 
     args.destinations = aws_regions_fanout
 
-    #Configure Global Vars
+    # Configure Global Vars
     singleton.AWS_ACCOUNT_ID = user_account
     singleton.AWS_USER_ID = user_id
     singleton.AWS_CANONICAL_USER_ID = user_canonical_id
@@ -357,12 +381,13 @@ def setup_singleton(args):
     singleton.NODEPS = nodeps
     singleton.SUPPRESS_WRITES = suppress_writes
 
+
 if __name__ == "__main__":
     global singleton
     singleton = SingletonClass()
     args = arg_parse(sys.argv[1:])
 
-    if args == None:
+    if args is None:
         print("\nExiting")
         sys.exit(1) # Exit code for invalid parameters. Script cannot run
 
@@ -372,7 +397,7 @@ if __name__ == "__main__":
         ctime = datetime.fromtimestamp(ctime)
         now = datetime.now()
         delta = timedelta(days=7)
-        if now < (ctime + delta): # If the timestamp_file was created within a week, skip dependencies check
+        if now < (ctime + delta):  # If the timestamp_file was created within a week, skip dependencies check
             args.nodeps = True
 
     if args.nodeps == False:
@@ -383,7 +408,7 @@ if __name__ == "__main__":
         if result.returncode != 0:
             print("Cannot check your dependencies")
             sys.exit(1)
-        pip_freeze_output = result.stdout.decode('utf-8').split('\n')
+        pip_freeze_output = result.stdout.decode("utf-8").split("\n")
 
         # get requirements
         requirements = open(f"{os.path.dirname(os.path.realpath(__file__))}/../requirements.txt").readlines()
@@ -398,14 +423,14 @@ if __name__ == "__main__":
             if len(needs_install) != 0:
                 print("\tInstall the following: <PACKAGE>==<VERSION>")
                 for package in needs_install:
-                    if needs_install[package] == None:
+                    if needs_install[package] is None:
                         print(f"\t\t{package}")
                     else:
                         print(f"\t\t{package}=={needs_install[package]}")
             if len(needs_version_adjustment) != 0:
                 print("\tUpgrade or Downgrade the following: <PACKAGE>==<VERSION>")
                 for package in needs_version_adjustment:
-                    if needs_version_adjustment[package] == None:
+                    if needs_version_adjustment[package] is None:
                         print(f"\t\t{package}")
                     else:
                         print(f"\t\t{package}=={needs_version_adjustment[package]}")
@@ -414,24 +439,36 @@ if __name__ == "__main__":
             if choice == "y" or choice == "Y":
                 if install_dependencies(needs_install, needs_version_adjustment) == False:
                     print("Failed to Install Dependencies\nExiting...")
-                    sys.exit(1) # Exit code for invalid parameters. Script cannot run
+                    sys.exit(1)  # Exit code for invalid parameters. Script cannot run
             elif choice == "n" or choice == "N":
                 print("No changes to system pip3 packages\nExiting...")
-                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+                sys.exit(1)  # Exit code for invalid parameters. Script cannot run
             else:
                 print("Invalid Input\nExiting...")
-                sys.exit(1) # Exit code for invalid parameters. Script cannot run
+                sys.exit(1)  # Exit code for invalid parameters. Script cannot run
 
         if exists(timestamp_file):
             os.remove(timestamp_file)
-        open(timestamp_file, "a").close() # Create the timestamp file to cache dependencies check for 1 week
+        open(timestamp_file, "a").close()  # Create the timestamp file to cache dependencies check for 1 week
 
-        print("Dependencies \U00002705") # unicode for GREEN CHECK
+        print("Dependencies \U00002705")  # unicode for GREEN CHECK
 
     setup_singleton(args)
 
-    #Placing these imports earlier creates a circular dependency with the installer
-    from fsp import list, diff, download, deltadownload, upload, copy, sync, movetos3, getfroms3, multiclone, fanout
+    # Placing these imports earlier creates a circular dependency with the installer
+    from fsp import (
+        list,
+        diff,
+        download,
+        deltadownload,
+        upload,
+        copy,
+        sync,
+        movetos3,
+        getfroms3,
+        multiclone,
+        fanout
+    )
 
     command = args.command
     if command == "list":

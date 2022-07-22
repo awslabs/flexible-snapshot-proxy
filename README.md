@@ -6,13 +6,13 @@ High-performance open-source orchestration utility that utilizes EBS Direct APIs
 
 Help is available by running `src/main.py -h`.
 
-Some usage examples are available as full-stack canaries in `src/test_functional.py`. 
+Some usage examples are available as full-stack canaries in `src/test_functional.py`.
 
 Example scenarios we have tested are in [Scenarios](Scenarios.md)
 
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
-```
+```python3
 % cat test/test_functional.py|grep python3 | cut -d "/" -f 2-3 | awk -F"[{']" '{print $1 $3 " " $6 " " $9}'
 
 src/main.py list ORG_SNAP  
@@ -31,7 +31,7 @@ src/main.py getfroms3 snapshotId DEST_S3_BUCKET
 ## Installation
 
 Currently, the utility will enumerate all Python package dependencies on runtime, and install necessary packages via `pip3` if they are not already installed on the system. It will show no indication of progress, and will not ask
-the user for permission to install additional packages. 
+the user for permission to install additional packages.
 
 TODO: Ask user for permission, print a list of packages it is going to install.
 TODO: Get the package into PyPI so it could be installed via `pip3`.
@@ -40,7 +40,7 @@ TODO: Get the package into PyPI so it could be installed via `pip3`.
 
 Configuration of the transfer is performed at runtime with the following CLI arguments:
 
-```
+```bash
 Optional arguments:
   -h, --help            show this help message and exit
   -o ORIGIN_REGION, --origin_region ORIGIN_REGION
@@ -51,12 +51,12 @@ Optional arguments:
   -vv                   increased output verbosity. (Pass/Fail for individual blocks)
   -vvv                  Maximum output verbosity. (All individual block retries will be recorded)
 ```
-Additional advanced tuneables are currently in the source itself. 
+Additional advanced tuneables are currently in the source itself.
 
-```
-NUM_JOBS controls the parallelism
-FULL_COPY enables transfer of sparse chunks, which are skipped by default
-offset in chunk_and_align() controls the maximum size of S3 Objects generated. 64 chunks = 32 MB.
+```python3
+NUM_JOBS # controls the parallelism
+FULL_COPY # enables transfer of sparse chunks, which are skipped by default
+offset # in chunk_and_align() controls the maximum size of S3 Objects generated. 64 chunks = 32 MB.
 ```
 
 TODO: implement a `setup.py` script for CLI configuration/installation.
@@ -64,7 +64,7 @@ TODO: implement a `setup.py` script for CLI configuration/installation.
 ## Features
 
 Flexible Snapshot Proxy supports the following commands:
-```
+```bash
 list                Returns accurate size of an EBS Snapshot by enumerating
                     actual consumed/allocated space. 
 

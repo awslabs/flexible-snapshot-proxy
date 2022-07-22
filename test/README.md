@@ -28,5 +28,5 @@ Once the EC2 environment has been setup.
 Use the command (from the top level directory): `python3 flexible-snapshot-proxy/test/test.py` with optional parameters `--all_tests` or `--small_canary` or `--dependency_checker`. Depending on which testing suite you would like to run
 
 ## Issues
-If any bugs are noticed feel free to open an issue on this Github repo
+If any bugs are noticed feel free to open an issue on this GitHub repository
 
