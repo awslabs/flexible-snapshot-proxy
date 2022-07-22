@@ -114,7 +114,12 @@ if __name__ == '__main__':
     '''
     if to_test.all_tests or to_test.dependency_checker:
         print("\nTesting Dependency Checker:")
-        runner.run(test_unit.DependencyCheckerSuite())
+        result = runner.run(test_unit.DependencyCheckerSuite())
+        print(f"{result.testsRun} tests were run - {len(result.skipped)} tests skipped.") 
+        print(f"{len(result.errors)} Errors. {len(result.failures)} Failures")
     if to_test.all_tests or to_test.small_canary:
         print("\nTesting FSP with Small Canary Tests:")
-        runner.run(test_functional.SmallCanarySuite())
+        result = runner.run(test_functional.SmallCanarySuite())
+        print(f"{result.testsRun} tests were run - {len(result.skipped)} tests skipped.")
+        print(f"{len(result.errors)} Errors. {len(result.failures)} Failures")
+
