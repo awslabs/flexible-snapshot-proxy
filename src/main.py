@@ -21,7 +21,7 @@ import sys
 from os.path import exists
 from datetime import datetime, timedelta
 
-from singleton import SingletonClass  #Project Scoped Global Vars
+from singleton import SingletonClass  # Project Scoped Global Vars
 
 """
 Works like java comparator
@@ -238,7 +238,8 @@ def arg_parse(args):
     sync_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
 
     movetos3_parser.add_argument('snapshot', help='Snapshot ID to be moved into an s3 bucket')
-    movetos3_parser.add_argument("s3Bucket", help='The s3 bucket destination. Must be created within your AWS account')
+
+    movetos3_parser.add_argument("s3Bucket", help="The s3 bucket destination. Must be created within your AWS account")
     movetos3_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where target s3 bucket exists. (default: source region)")
     movetos3_parser.add_argument("-e", "--endpoint_url", default=None, help="S3 Endpoint URL, for custom destinations such as Snowball Edge. (default: none)")
     movetos3_parser.add_argument("-f", "--full_copy", default=False, action="store_true", help="Does not make an size optimizations")
@@ -496,6 +497,7 @@ if __name__ == "__main__":
         if not args.endpoint_url is None:
             singleton.AWS_S3_ENDPOINT_URL = args.endpoint_url
         if not args.endpoint_url is None:
+
             singleton.AWS_S3_PROFILE = args.profile
         movetos3(snapshot_id=args.snapshot)
 
