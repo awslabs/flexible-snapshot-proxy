@@ -7,8 +7,7 @@ on:
   pull_request:
 
 jobs:
-  lint:
-    # LINTER JOB
+  lint: # LINTER JOB - Identifies recommendations for how to keep the code clean
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -20,3 +19,28 @@ jobs:
           DEFAULT_BRANCH: main
           DISABLE_ERRORS: true # Linter will not cause a failure, just report how to clean the files
           VALIDATE_ALL_CODEBASE: false # Linter will only check the diff
+
+  test: # TESTING JOB - Runs tests to ensure backwards compatibility
+    runs-on: ubuntu-latest
+    container:
+      image: amazonlinux:latest
+      options: --user root --privileged
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+
+      - name: Install Git 2.18, Python3, sudo and losetup
+        run: |
+          yum install -y git
+          yum install -y python3
+          yum install -y sudo
+          yum install -y util-linux
+
+      - uses: actions/checkout@v3
+
+      # Runs a set of commands using the runners shell TODO entry point in testing script and exit codes to convey failure
+      - name: Run a multi-line script
+        run: |
+          echo Attempting testing setup
+          python3 ./test/setup.py
