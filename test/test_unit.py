@@ -13,6 +13,8 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 """
+import json
+import random
 import unittest
 import sys
 import os
@@ -21,6 +23,7 @@ import subprocess
 sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src') #makes source code testable
 
 from main import install_dependencies, dependency_checker, version_cmp
+from snapshot_factory import generate_pattern_snapshot, check_pattern
 
 '''
 Below are unit tests for the dependency checker in src/main.py
@@ -199,6 +202,115 @@ class DependencyCheckAndInstall(unittest.TestCase):
         counter += 1
     self.assertEqual(counter, 2, "Did not identify all packages that need to be upgraded.")
 
+class TestSnapshotFactory(unittest.TestCase):
+
+  def run_test_matrix(self, TEST_MATRIX):
+    for test_case in TEST_MATRIX:
+      result = generate_pattern_snapshot(
+        test_case["parameters"]["size"], 
+        test_case["parameters"]["start"], 
+        test_case["parameters"]["end"], 
+        test_case["parameters"]["skip"], 
+        test_case["parameters"]["offset"]
+      )
+
+      msg = test_case["description"]
+      self.assertIsNotNone(result, f"Failed to create snapshot\n{msg}\n" + json.dumps(test_case["parameters"], indent=2))
+
+      patterns = []
+      patterns.append(result["metadata"])
+      test_case["patterns"] = patterns
+      test_case["snap"] = result["snap"]
+      test_case["size"] = result["size"]
+
+      # takes ~ 30s to min for ebs direct to see snapshot. pre-load snapshot before testing validity
+      check_pattern(result["snap"], result["size"], patterns)
+    
+    for test_case in TEST_MATRIX:
+      msg = test_case["description"]
+      patterns = test_case["patterns"]
+      snapshot_id = test_case["snap"]
+      size = test_case["size"]
+      self.assertTrue(check_pattern(snapshot_id, size, patterns), f"snapshot data is incorrect\n{msg}\n" + json.dumps(test_case["parameters"], indent=2))
+
+  def test_full_disk_no_offset(self):
+    TEST_MATRIX = []
+    # powers of two
+    skip = 1
+    while skip <= 32:
+        test_case = {
+            "parameters": {
+              "size": 1,
+              "start": 0,
+              "end": None,
+              "skip": skip,
+              "offset": 0
+            },
+            f"description": f"Attempting to create a snapshot where every {skip} sectors is label with its sector number. Good for checking reordering of snapshot data."
+        }
+        TEST_MATRIX.append(test_case)
+
+        skip *= 2
+      
+    # primes
+    skips =  [3, 5, 7, 11]
+    for skip in skips:
+      test_case = {
+        "parameters": {
+            "size": 1,
+            "start": 0,
+            "end": None,
+            "skip": skip,
+            "offset": 0
+          },
+          "description": f"Attempting to create a snapshot where every {skip} sectors is label with its sector number. Good for checking reordering of snapshot data."
+      }
+      TEST_MATRIX.append(test_case)
+
+    self.run_test_matrix(TEST_MATRIX)
+
+  def test_full_disk_offset(self):
+    TEST_MATRIX = []
+    skips = [1,2,3,4]
+    for skip in skips:
+      for i in range(1, skip):
+        test_case = {
+            "parameters": {
+                "size": 1,
+                "start": 0,
+                "end": None,
+                "skip": skip,
+                "offset": i
+        
+            },
+            "description": f"Attempting to create a snapshot where every {skip} sectors is label with its sector number with offset = {i}. Good for checking reordering of snapshot data."
+        }
+        TEST_MATRIX.append(test_case)
+
+    self.run_test_matrix(TEST_MATRIX)
+
+  def test_disk_subset_random_param(self):
+    TEST_MATRIX = []
+    for i in range(5):
+      start = random.randint(0, 2097152/2)
+      end = random.randint(2097152/2, 2097152)
+      skip = random.randint(0, 2048)
+      offset = random.randint(0, skip)
+      test_case = {
+        "parameters": {
+            "size": 1,
+            "start": start,
+            "end": end,
+            "skip": skip,
+            "offset": offset
+    
+        },
+        "description": f"Attempting to create a snapshot where every {skip} sectors is label with its sector number with offset = {offset} on the sector interval [{start}, {end}]. Good for checking reordering of snapshot data."
+      }
+      TEST_MATRIX.append(test_case)
+
+    self.run_test_matrix(TEST_MATRIX)
+
 
 def DependencyCheckerSuite():
   suite = unittest.TestSuite()
@@ -216,5 +328,15 @@ def DependencyCheckerSuite():
   suite.addTest(DependencyCheckAndInstall('fresh_install'))
   suite.addTest(DependencyCheckAndInstall('all_installed'))
   suite.addTest(DependencyCheckAndInstall('mix_in_to_install_to_update_and_some_satisfied'))
+
+  return suite
+
+
+def SnapshotFactorySuite():
+  suite = unittest.TestSuite()
+
+  suite.addTest(TestSnapshotFactory('test_full_disk_no_offset'))
+  suite.addTest(TestSnapshotFactory('test_full_disk_offset'))
+  suite.addTest(TestSnapshotFactory('test_disk_subset_random_param'))
 
   return suite
