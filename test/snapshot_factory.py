@@ -53,7 +53,7 @@ JSON: {
 OR None if parameters are not valid!
 }
 """
-def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset = 0):
+def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset = 0, parent=None):
     DEVICE_SIZE = GB_SIZE * size
 
     if end is None:
@@ -98,10 +98,18 @@ def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset 
         # print(f"{(round( (index_to_byte_offset(end) - index_to_byte_offset(start) ) / DEVICE_SIZE , 3) * 100)}% of disk contains this pattern")
 
     # print("Uploading snapshot...")
-    bash_upload = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "upload" , LOOP_FILE], capture_output=True)
-    if bash_upload.returncode != 0:
-        # print("Error uploading snapshot")
-        sys.exit(1)
+    while True:
+        if parent is None:
+            bash_upload = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "upload" , LOOP_FILE], capture_output=True)
+        else:
+            bash_upload = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "upload" , LOOP_FILE, "--parent_snapshot_id", parent], capture_output=True)
+        
+        if bash_upload.returncode == 0: # todo error handle for correct exception (ValidationException)
+            break
+        else:
+            print(".", end='', flush=True)
+            sleep(3)
+
     lines = bash_upload.stdout.decode("utf-8").split("\n")
     snapshot_id = lines[4].strip()
     # print("snapshot:", snapshot_id)
@@ -119,6 +127,7 @@ def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset 
             "skip": skip,
             "offset": offset,
         },
+        "parent": parent,
     }
 
 """
