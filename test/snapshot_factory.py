@@ -89,8 +89,6 @@ def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset 
             sec_num = byte_offset_to_index(loop.tell())
             if ( sec_num % skip ) == (( start + offset ) % skip ):
                 advanced += loop.write(sec_num.to_bytes(INTEGER_SIZE_IN_BITS, ENDIANNESS))
-                if index_to_byte_offset(sec_num) == 2097150:
-                    # print(f"Wrote to {2097150}")
 
             # next write sector
             if (index_to_byte_offset(skip) + loop.tell()) - advanced >= DEVICE_SIZE:
@@ -109,7 +107,7 @@ def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset 
     # print("snapshot:", snapshot_id)
 
     # print("Cleanup...")
-    # print(subprocess.run(["sudo", "losetup", "-d", LOOP_FILE]))
+    subprocess.run(["sudo", "losetup", "-d", LOOP_FILE])
     
     # Return snap_id with metadata on how it was constructed
     return {
@@ -120,7 +118,7 @@ def generate_pattern_snapshot(size = 1, start = 0, end = None, skip = 1, offset 
             "end": end,
             "skip": skip,
             "offset": offset,
-        }
+        },
     }
 
 """
@@ -216,17 +214,8 @@ def check_pattern(snapshot_id, size, patterns):
 # Run this file to tests an end to end test snapshot creation and verification
 if __name__ == "__main__":
     if os.getuid() != 0:
-        # print("MUST RUN AS SUPER USER (SUDO)")
+        print("MUST RUN AS SUPER USER (SUDO)")
         sys.exit(1)
-
-
-    # print(
-        "Global Consts:",
-        f"Raw Volume Size: {GB_SIZE} bytes",
-        f"Sector Size: {SECTOR_SIZE} bytes",
-        f"Bits in Bytes: {BITS_IN_BYTE}",
-        "\n",
-    sep='\n')
 
 
     list_of_patterns = []
@@ -237,4 +226,4 @@ if __name__ == "__main__":
     gb_size = pattern1["size"]
     # print(snapshot)
 
-    # print(f"Check Disk Pattern: {check_pattern(snapshot, gb_size, list_of_patterns)}\n\n")
+    print(f"Check Disk Pattern: {check_pattern(snapshot, gb_size, list_of_patterns)}\n\n")
