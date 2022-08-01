@@ -439,9 +439,10 @@ def copy_block_to_snap(command, snapshot, block, ebs, ebs2, snap, count):
         resp = try_get_block(ebs, snapshot, block["BlockIndex"], block["BlockToken"])
     elif command == "sync":
         resp = try_get_block(ebs, snapshot, block["BlockIndex"], block["SecondBlockToken"])
-    data = resp["BlockToken"].read()
-    checksum = b64encode(hashlib.sha256(data).digest()).decode()
-    try_put_block(ebs2, block["BlockIndex"], snap["SnapshotId"], data, checksum, count)
+    if "BlockToken" in resp:
+        data = resp["BlockToken"].read()
+        checksum = b64encode(hashlib.sha256(data).digest()).decode()
+        try_put_block(ebs2, block["BlockIndex"], snap["SnapshotId"], data, checksum, count)
 
 # Wrapper around put_block_from_file() that parallelizes individual block uploads.
 # Data path: File / Device -> EBS Direct API -> EBS Snapshot
