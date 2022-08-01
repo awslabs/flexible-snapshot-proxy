@@ -144,38 +144,40 @@ snapshot_id (string): specifies the snapshot to retrieve
 size (int): size of a snapshot in GB
 patters (list): a list of metadata that is to used to check recreated patterns - only specify patterns that exist! Not ones that have 'dropped out'
 """
-def check_pattern(snapshot_id, size, patterns):
+def check_pattern(snapshot_id, size, patterns, device_path=None):
     DEVICE_SIZE = GB_SIZE * size
 
-    # Recreate Disk
-    # print("Creating Loop Device...")
-    with open("/tmp/zeroes", "w") as outfile:
-        subprocess.run(["sudo", "head", "-c" , str(DEVICE_SIZE), "/dev/zero"], stdout=outfile)
-    LOOP_FILE = subprocess.run(["sudo", "losetup", "-f"], capture_output=True).stdout.decode("utf-8").strip()
-    # print(subprocess.run(["sudo", "losetup", LOOP_FILE, "/tmp/zeroes"], capture_output=True))
-    # print(f"0'ed Loopback device created successfully - {size} GB")
+    LOOP_FILE = device_path
+    if device_path is None:
+        # Recreate Disk
+        # print("Creating Loop Device...")
+        with open("/tmp/zeroes", "w") as outfile:
+            subprocess.run(["sudo", "head", "-c" , str(DEVICE_SIZE), "/dev/zero"], stdout=outfile)
+        LOOP_FILE = subprocess.run(["sudo", "losetup", "-f"], capture_output=True).stdout.decode("utf-8").strip()
+        # print(subprocess.run(["sudo", "losetup", LOOP_FILE, "/tmp/zeroes"], capture_output=True))
+        # print(f"0'ed Loopback device created successfully - {size} GB")
 
-    with open(LOOP_FILE, 'rb') as loop:
-        loop.seek(0, 0)
-        STARTING_OFFSET = loop.tell()
-        loop.seek(0, 2)
-        ENDING_OFFSET = loop.tell()
-    # print(f"\tStarting Byte Offset: {STARTING_OFFSET} - Sector # {byte_offset_to_index(STARTING_OFFSET)}")
-    # print(f"\tEnding Byte Offset: {ENDING_OFFSET} - Sector # {byte_offset_to_index(ENDING_OFFSET)}")
-
-    # print("Downloading snapshot\nBacking Off ")
-    bash_download = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "download", snapshot_id, LOOP_FILE], capture_output=True)
-    while True:
-        if bash_download.returncode == 0:
-            break
-        # print(".", end='', flush=True)
-        sleep(3)
+        # print("Downloading snapshot\nBacking Off ")
         bash_download = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "download", snapshot_id, LOOP_FILE], capture_output=True)
+        while True:
+            if bash_download.returncode == 0:
+                break
+            # print(".", end='', flush=True)
+            sleep(3)
+            bash_download = subprocess.run(["sudo", "python3", PATH_TO_FSP_CLIENT, "download", snapshot_id, LOOP_FILE], capture_output=True)
 
-    if bash_download.returncode != 0:
-        # print("Error downloading snapshot")
-        sys.exit(1)
+        if bash_download.returncode != 0:
+            # print("Error downloading snapshot")
+            sys.exit(1)
     
+    with open(LOOP_FILE, 'rb') as loop:
+            loop.seek(0, 0)
+            STARTING_OFFSET = loop.tell()
+            loop.seek(0, 2)
+            ENDING_OFFSET = loop.tell()
+        # print(f"\tStarting Byte Offset: {STARTING_OFFSET} - Sector # {byte_offset_to_index(STARTING_OFFSET)}")
+        # print(f"\tEnding Byte Offset: {ENDING_OFFSET} - Sector # {byte_offset_to_index(ENDING_OFFSET)}")
+
     # print(f"\nPatterns to check on restored volume\n{json.dumps(patterns, indent=2)}")
 
     # print("\nChecking Patterns - Reading Sector Numbers")
