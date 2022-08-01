@@ -224,9 +224,10 @@ def arg_parse(args):
 
     deltadownload_parser.add_argument('snapshot_one', help='First snapshot ID to used in comparison')
     deltadownload_parser.add_argument('snapshot_two', help='Second snapshot ID to used in comparison')
-    deltadownload_parser.add_argument('file_path', help='File path of download location. (Absolute path preferred)')
+    deltadownload_parser.add_argument('file_path', default=None, help='File path of download location. (Absolute path preferred)')
 
     upload_parser.add_argument('file_path', help='File path of file or raw device to upload as snapshot')
+    upload_parser.add_argument("--parent_snapshot_id", help="Parent Snapshot ID of the snapshot to be created and uploaded")
 
     copy_parser.add_argument('snapshot', help='Snapshot ID to be copied')
     copy_parser.add_argument("-d", "--destination_region", default=None, help="AWS Destination Region. Where snapshot will copied to. (default: source region)")
@@ -484,7 +485,7 @@ if __name__ == "__main__":
         deltadownload(snapshot_id_one=args.snapshot_one, snapshot_id_two=args.snapshot_two, file_path=args.file_path)
 
     elif command == "upload":
-        upload(file_path=args.file_path)
+        upload(file_path=args.file_path, parent_snapshot_id=args.parent_snapshot_id)
 
     elif command == "copy":
         copy(snapshot_id=args.snapshot)

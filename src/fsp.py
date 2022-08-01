@@ -588,7 +588,7 @@ def deltadownload(snapshot_id_one, snapshot_id_two, file_path):
         )  # retrieve the blocks of snapshot_one missing in snapshot_two
     print('deltadownload took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
 
-def upload(file_path):
+def upload(file_path, parent_snapshot_id):
     files = []
     files.append(file_path)
     validate_file_paths_read(files)
@@ -602,7 +602,10 @@ def upload(file_path):
         split = np.array_split(range(chunks), singleton.NUM_JOBS)
         count = Counter(Manager(), 0)
         print("Size of", file_path, "is", size, "bytes and", chunks, "chunks")
-        snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path)
+        if parent_snapshot_id is None:
+            snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path)
+        else:
+            snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path, ParentSnapshotId=parent_snapshot_id)
         with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
             parallel(
                 delayed(put_blocks)(array, snap["SnapshotId"], file_path, count) 
