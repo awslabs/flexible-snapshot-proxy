@@ -23,7 +23,7 @@ import sys
 
 sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src')
 from main import install_dependencies
-from snapshot_factory import generate_pattern_snapshot
+from snapshot_factory import generate_pattern_snapshot, check_pattern
 
 #import the tests
 import test_functional
@@ -39,7 +39,7 @@ def generate_config(params):
         "s3-bucket": "xxxxxxxxxx",
         "snapshots": None
     }
-    with open('config.yaml', 'w') as config_file:
+    with open(os.path.dirname(os.path.realpath(__file__)) + '/config.yaml', 'w') as config_file:
         yaml.dump(params, config_file)
 
 def setup():
@@ -73,8 +73,8 @@ def setup():
     # Generate test snapshots
     result_every_sector = generate_pattern_snapshot()
     result_every_even_sector = generate_pattern_snapshot(skip = 2)
-    result_every_fourth_sector = generate_pattern_snapshot(skip = 4)
-    result_every_third_sector = generate_pattern_snapshot(skip = 3)
+    result_every_fourth_sector = generate_pattern_snapshot(skip = 4, parent=(result_every_even_sector["snap"], False))
+    result_every_third_sector = generate_pattern_snapshot(skip = 3, parent=(result_every_fourth_sector["snap"], True))
 
     params = {
         "aws-default-region": AWS_DEFAULT_REGION,
@@ -86,22 +86,26 @@ def setup():
             "every-sector": {
                 "snapshot-id": result_every_sector["snap"],
                 "size": result_every_sector["size"],
-                "metadata": result_every_sector["metadata"]
+                "metadata": result_every_sector["metadata"],
+                "parent": None
             },
             "every-second-sector": {
                 "snapshot-id": result_every_even_sector["snap"],
                 "size": result_every_even_sector["size"],
-                "metadata": result_every_even_sector["metadata"]
+                "metadata": result_every_even_sector["metadata"],
+                "parent": None
             },
             "every-fourth-sector": {
                 "snapshot-id": result_every_fourth_sector["snap"],
                 "size": result_every_fourth_sector["size"],
-                "metadata": result_every_fourth_sector["metadata"]
+                "metadata": result_every_fourth_sector["metadata"],
+                "parent": result_every_fourth_sector["parent"][0]
             },
-            "every-third-sector": {
+            "every-third-and-fourth-sector": {
                 "snapshot-id": result_every_third_sector["snap"],
                 "size": result_every_third_sector["size"],
-                "metadata": result_every_third_sector["metadata"]
+                "metadata": result_every_third_sector["metadata"],
+                "parent": result_every_third_sector["parent"][0]
             },
         }
     }
@@ -127,7 +131,6 @@ if __name__ == '__main__':
             sys.exit(1)
         setup()
 
-    sys.exit(1)
     to_test = parse_args(sys.argv[1:])
     runner = unittest.TextTestRunner(verbosity=2)
 

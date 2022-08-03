@@ -25,8 +25,27 @@ sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src') #mak
 from main import install_dependencies, dependency_checker, version_cmp
 from snapshot_factory import generate_pattern_snapshot, check_pattern
 
-'''
-Below are unit tests for the dependency checker in src/main.py
+"""Method to expose test cases for dependency checker and installer to test runner via a test suite."""
+def DependencyCheckerSuite():
+  suite = unittest.TestSuite()
+
+  suite.addTest(PackageVersionCMP('equal_length_less'))
+  suite.addTest(PackageVersionCMP('equal_length_same'))
+  suite.addTest(PackageVersionCMP('equal_length_greater'))
+  suite.addTest(PackageVersionCMP('v1_shorter_less'))
+  suite.addTest(PackageVersionCMP('v1_shorter_same'))
+  suite.addTest(PackageVersionCMP('v1_shorter_greater'))
+  suite.addTest(PackageVersionCMP('v2_shorter_less'))
+  suite.addTest(PackageVersionCMP('v2_shorter_same'))
+  suite.addTest(PackageVersionCMP('v2_shorter_greater'))
+
+  suite.addTest(DependencyCheckAndInstall('fresh_install'))
+  suite.addTest(DependencyCheckAndInstall('all_installed'))
+  suite.addTest(DependencyCheckAndInstall('mix_in_to_install_to_update_and_some_satisfied'))
+
+  return suite
+
+'''Unit tests for the dependency checker in src/main.py
 '''
 class PackageVersionCMP(unittest.TestCase):
   def equal_length_less(self):
@@ -138,6 +157,8 @@ class PackageVersionCMP(unittest.TestCase):
     v2 = "2"
     self.assertTrue(version_cmp(v1,v2) > 0, f"version_cmp({v1},{v2}) should return > 0 not {version_cmp(v1,v2)}")
 
+'''Unit tests for the dependency install prompter in src/main.py
+'''
 class DependencyCheckAndInstall(unittest.TestCase):
   requirements = ['aws-shell>=0.2.2', 'boto3>=1.24.22', 'botocore>=1.27.25',
   'joblib>=1.1.0', 'numpy>=1.21.6', 'ruamel.yaml>=0.17.21', 'ruamel.yaml.clib>=0.2.6',
@@ -202,6 +223,21 @@ class DependencyCheckAndInstall(unittest.TestCase):
         counter += 1
     self.assertEqual(counter, 2, "Did not identify all packages that need to be upgraded.")
 
+
+"""Method to expose test cases for dependency checker and installer to test runner via a test suite."""
+def SnapshotFactorySuite():
+  suite = unittest.TestSuite()
+
+  suite.addTest(TestSnapshotFactory('test_full_disk_no_offset'))
+  suite.addTest(TestSnapshotFactory('test_full_disk_offset'))
+  suite.addTest(TestSnapshotFactory('test_disk_subset_random_param'))
+
+  return suite
+
+'''Unit tests for the snapshot_factory.py
+
+Note that these can take quite a long time to run (30 minutes +)
+'''
 class TestSnapshotFactory(unittest.TestCase):
 
   def run_test_matrix(self, TEST_MATRIX):
@@ -310,33 +346,3 @@ class TestSnapshotFactory(unittest.TestCase):
       TEST_MATRIX.append(test_case)
 
     self.run_test_matrix(TEST_MATRIX)
-
-
-def DependencyCheckerSuite():
-  suite = unittest.TestSuite()
-
-  suite.addTest(PackageVersionCMP('equal_length_less'))
-  suite.addTest(PackageVersionCMP('equal_length_same'))
-  suite.addTest(PackageVersionCMP('equal_length_greater'))
-  suite.addTest(PackageVersionCMP('v1_shorter_less'))
-  suite.addTest(PackageVersionCMP('v1_shorter_same'))
-  suite.addTest(PackageVersionCMP('v1_shorter_greater'))
-  suite.addTest(PackageVersionCMP('v2_shorter_less'))
-  suite.addTest(PackageVersionCMP('v2_shorter_same'))
-  suite.addTest(PackageVersionCMP('v2_shorter_greater'))
-
-  suite.addTest(DependencyCheckAndInstall('fresh_install'))
-  suite.addTest(DependencyCheckAndInstall('all_installed'))
-  suite.addTest(DependencyCheckAndInstall('mix_in_to_install_to_update_and_some_satisfied'))
-
-  return suite
-
-
-def SnapshotFactorySuite():
-  suite = unittest.TestSuite()
-
-  suite.addTest(TestSnapshotFactory('test_full_disk_no_offset'))
-  suite.addTest(TestSnapshotFactory('test_full_disk_offset'))
-  suite.addTest(TestSnapshotFactory('test_disk_subset_random_param'))
-
-  return suite
