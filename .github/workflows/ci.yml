@@ -20,11 +20,21 @@ jobs:
           DISABLE_ERRORS: true # Linter will not cause a failure, just report how to clean the files
           VALIDATE_ALL_CODEBASE: false # Linter will only check the diff
 
+  prepare_docker:
+    run: |
+      mkdir ~/.aws
+      touch ~/.aws/config
+      touch ~/.aws/credentials
+      echo {{ secrets.AWS_TEST_ACCOUNT_CONFIG }} > ~/.aws/config
+      echo {{ secrets.AWS_TEST_ACCOUNT_CREDENTIALS }} > ~/.aws/credentials
+      cat ~/.aws/config
+      cat ~/.aws/credentials
+  
   test: # TESTING JOB - Runs tests to ensure backwards compatibility
     runs-on: ubuntu-latest
     container:
       image: amazonlinux:latest
-      options: --user root --privileged
+      options: --user root --privileged -v ~/.aws:/root/.aws
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -40,7 +50,14 @@ jobs:
       - uses: actions/checkout@v3
 
       # Runs a set of commands using the runners shell TODO entry point in testing script and exit codes to convey failure
-      - name: Run a multi-line script
+      - name: Configure environment to run tests
         run: |
-          echo Attempting testing setup
-          python3 ./test/setup.py
+          pwd
+          ls -la 
+          pip3 --version
+          echo Attempting to setup FSP dependencies!
+          pip3 install -r requirements.txt
+          echo dependencies setup!
+          aws --version
+          aws help
+          aws configure << {{ secrets.AWS_TEST_ACCOUNT_CONFIGURATION_FILE }}
