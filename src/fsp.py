@@ -16,7 +16,6 @@
 
 #
 # Description: Fast EBS Direct API Client inspired by awslabs/coldsnap.
-# Author: Kirill Davydychev, kdavyd@amazon.com
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 # Minimum requirements: 4 vCPU, 8GB RAM.
