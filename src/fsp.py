@@ -48,6 +48,7 @@ import sys
 import time
 import math
 import zstandard
+import platform
 from base64 import b64encode, urlsafe_b64encode
 from joblib import Parallel, delayed
 from multiprocessing import Manager
@@ -398,7 +399,10 @@ def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), "rb+")
+            if platform.system() == "Windows":
+                os.fdopen(os.open(file, os.O_WRONLY), "rb+") # Windows doesn't allow O_CREAT on a PhysicalDrive
+            else: 
+                os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), "rb+")
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
