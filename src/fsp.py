@@ -96,10 +96,18 @@ def try_get_block(ebs, snapshot_id, block_index, block_token):
                 SnapshotId=snapshot_id, BlockIndex=block_index, BlockToken=block_token
             )
             continue
-        except Exception as e:
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
             retry_count += 1  # We catch all errors here, mostly it'll be API throttle events so we just assume. In theory should work with network interruptions as well.
             if (retry_count > 1):  # Only alert for second retry, but keep trying indefinitely. First-time throttle events happen fairly regularly.
-                print (block_token, "throttled by API", retry_count, "times, retrying.")
+                # See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/error-retries.html
+                #
+                if error_code == "ThrottlingException":
+                    print (block_token, "exceeded GetSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-C125AE42")
+                elif error_code == "RequestThrottledException":
+                    print (block_token, "exceeded GetSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-028ACFB9")
+                else:
+                    print (block_token, "failed", retry_count, "times, retrying.", error_code)
             pass
     return resp
 
@@ -126,10 +134,18 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
                     ChecksumAlgorithm='SHA256'
                 )
                 continue
-            except Exception as e:
+            except ClientError as e:
+                error_code = e.response['Error']['Code']
                 retry_count += 1
                 if retry_count > 1:
-                    print(block, "throttled by API", retry_count, "times, retrying.")
+                    # See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/error-retries.html
+                    #
+                    if error_code == "ThrottlingException":
+                        print (block, "exceeded PutSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-AFAE1BE8")
+                    elif error_code == "RequestThrottledException":
+                        print (block, "exceeded PutSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-1774F84A")
+                    else:
+                        print (block, "failed", retry_count, "times, retrying.", error_code)
                 pass
         count.increment()
     return resp
