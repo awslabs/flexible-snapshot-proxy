@@ -263,17 +263,21 @@ def arg_parse(args):
 
 def setup_singleton(args):
     import boto3  # Safe since this import is not reached unless dependency check passes.
+    import botocore.exceptions # Also safe
     user_account = ""
     user_id = ""
     try:
         sts = boto3.client("sts")
         user_account = sts.get_caller_identity().get("Account")
         user_id = sts.get_caller_identity().get("UserId")
-    except sts.exceptions as e:
-        print("Can not get AWS user account. Is your AWS CLI Configured?")
-        print("Try running: aws configure")
+    except botocore.exceptions.NoCredentialsError as e:
+        print("Unable to locate credentials. You can configure credentials by running \"aws configure\".")
         print(e)
-        return None
+        sys.exit(1) 
+    except botocore.exceptions.EndpointConnectionError as e:
+        print(e)
+        print("Unable to reach default region endpoint. You can configure default region by running \"aws configure\".")
+        sys.exit(1) 
 
     user_canonical_id = ""
     try:
