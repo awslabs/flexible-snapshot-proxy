@@ -14,7 +14,6 @@
   limitations under the License.
 """
 
-from random import choices
 import unittest
 import os
 import boto3
@@ -24,6 +23,7 @@ import sys
 
 sys.path.insert(1, f'{os.path.dirname(os.path.realpath(__file__))}/../src')
 from main import install_dependencies
+from snapshot_factory import generate_pattern_snapshot, check_pattern
 
 #import the tests
 import test_functional
@@ -31,63 +31,87 @@ import test_unit
 
 def generate_config(params):
     if params == None:
-        params = {}
-        params["ami-snapshot"] = "snap-xxxxxxxxxxx"
-        params["dest-s3bucket"] = "xxxxxxxxxxx"
-        params["ec2-instanceId"] = "i-xxxxxxxxxxx"
-        params["original-ami-path"] = "/xxxxxxxxxx"
-        params["restored-ami-path"] = "/xxxxxxxxxx"
-        params["small-volume-path"] = "/xxxxxxxxxx"
-        params["default-retry-time"] = 3
-        params["max-retry-count"] = 5
-        params["aws-origin-region"] = "xx-xxxx-x"
-        params["small-volume-snapshots"] = {
-            "empty": "snap-xxxxxxxxxxx",
-            "half": "snap-xxxxxxxxxxx",
-            "full": "snap-xxxxxxxxxxx",
-        }
-    with open('config.yaml', 'w') as config_file:
+        params = {
+        "aws-default-region": "xx-xxxx-x",
+        "aws-cross-region": "xx-xxxx-x",
+        "backoff-time-seconds": 3,
+        "max-backoff-retry": 5,
+        "s3-bucket": "xxxxxxxxxx",
+        "snapshots": None
+    }
+    with open(os.path.dirname(os.path.realpath(__file__)) + '/config.yaml', 'w') as config_file:
         yaml.dump(params, config_file)
 
 def setup():
-    print("Setting up testing configuration file...")
-    print("Enter y/Y for a blank config file (for if required testing resources are setup, but config.yaml is lost)")
-    choice = input("(N/y): ")
-    if choice == 'y' or choice == 'Y':
-        generate_config(None)
-    else: #get inputs for config file
-        print("Enter y/Y to configure aws resources required for testing: ")
-        choice = input("(n/Y): ")
-        if choice == 'n' or choice == 'N':
-            aws_region = input(f"aws-origin-region: ")
-            ec2_instance = input("EC2 instance id: ")
-            ami_snapshot = input(f"EC2 instance {ec2_instance} ami snapshot: ")
-            s3_bucket = input("Destination s3 bucket: ")
-            original_ami_path = input(f"EC2 instance {ec2_instance} original ami path: ")
-            restored_ami_path = input(f"EC2 instance {ec2_instance} restored ami path: ")
-            small_volume_path = input(f"Small (1GiB) volume path on {ec2_instance}: ")
-            empty_snap = input(f"Empty snapshot-id of small (1GiB) volume: ")
-            half_snap = input(f"Half full snapshot-id of small (1GiB) volume: ")
-            full_snap = input(f"Full snapshot-id of small (1GiB) volume: ")
+    print("Setting up testing configuration file and testing resources...")
+    
+    BACKOFF_TIME = 3
+    MAX_RETRY_COUNT = 5
 
-            params = {}
-            params["ami-snapshot"] = ami_snapshot
-            params["dest-s3bucket"] = s3_bucket
-            params["ec2-instanceId"] = ec2_instance
-            params["original-ami-path"] = original_ami_path
-            params["restored-ami-path"] = restored_ami_path
-            params["small-volume-path"] = small_volume_path
-            params["default-retry-time"] = 3
-            params["max-retry-count"] = 5
-            params["aws-origin-region"] = aws_region
-            params["small-volume-snapshots"] = {
-                "empty": empty_snap,
-                "half": half_snap,
-                "full": full_snap,
-            }
-            generate_config(params)
-        else:
-            print("This feature is not yet available!")
+    AWS_DEFAULT_REGION = "us-east-1"
+    AWS_CROSS_REGION = "ap-southeast-2"
+
+    # validate aws cli is configured correctly (testing dependency)
+    try:
+        sts = boto3.client("sts")
+        user_account = sts.get_caller_identity().get("Account")
+        user_id = sts.get_caller_identity().get("UserId")
+    except sts.exceptions as e:
+        print("Can not get AWS user account. Is your AWS CLI Configured?")
+        print("Try running: aws configure")
+        print(e)
+        return None
+    finally:
+        if user_account is None or user_id is None:
+            print("Can not get AWS user account. Is your AWS CLI Configured?")
+            print("Try running: aws configure")
+            print(e)
+            return None
+
+    s3_BUCKET = input("s3 bucket for testing (NON-PRODUCTION!): ") 
+    
+    # Generate test snapshots
+    result_every_sector = generate_pattern_snapshot()
+    result_every_even_sector = generate_pattern_snapshot(skip = 2)
+    result_every_fourth_sector = generate_pattern_snapshot(skip = 4, parent=(result_every_even_sector["snap"], False))
+    result_every_third_sector = generate_pattern_snapshot(skip = 3, parent=(result_every_fourth_sector["snap"], True))
+
+    params = {
+        "aws-default-region": AWS_DEFAULT_REGION,
+        "aws-cross-region": AWS_CROSS_REGION,
+        "backoff-time-seconds": BACKOFF_TIME,
+        "max-backoff-retry": MAX_RETRY_COUNT,
+        "s3-bucket": s3_BUCKET,
+        "snapshots":{
+            "every-sector": {
+                "snapshot-id": result_every_sector["snap"],
+                "size": result_every_sector["size"],
+                "metadata": result_every_sector["metadata"],
+                "parent": None
+            },
+            "every-second-sector": {
+                "snapshot-id": result_every_even_sector["snap"],
+                "size": result_every_even_sector["size"],
+                "metadata": result_every_even_sector["metadata"],
+                "parent": None
+            },
+            "every-fourth-sector": {
+                "snapshot-id": result_every_fourth_sector["snap"],
+                "size": result_every_fourth_sector["size"],
+                "metadata": result_every_fourth_sector["metadata"],
+                "parent": result_every_fourth_sector["parent"][0]
+            },
+            "every-third-and-fourth-sector": {
+                "snapshot-id": result_every_third_sector["snap"],
+                "size": result_every_third_sector["size"],
+                "metadata": result_every_third_sector["metadata"],
+                "parent": result_every_third_sector["parent"][0]
+            },
+        }
+    }
+
+    generate_config(params)
+
 
 
 
@@ -96,11 +120,15 @@ def parse_args(args):
     parser.add_argument('--all_tests', default=False, action='store_true', help='Run all tests listed below.')
     parser.add_argument('--small_canary', default=False, action='store_true', help='Run tests on small data size for a sanity check that script is functional')
     parser.add_argument('--dependency_checker', default=False, action='store_true', help="Run tests to ensure that script dependency checker and installer is working correctly")
+    parser.add_argument('--snapshot_factory_checker', default=False, action='store_true', help="Run tests to ensure that script to generate and check test snapshots is working correctly")
 
     return parser.parse_args(args)
 
 if __name__ == '__main__':
     if not os.path.exists(f'{os.path.dirname(os.path.realpath(__file__))}/config.yaml'):
+        if os.getuid() != 0:
+            print("MUST RUN AS SUPER USER (SUDO)")
+            sys.exit(1)
         setup()
 
     to_test = parse_args(sys.argv[1:])
@@ -117,9 +145,13 @@ if __name__ == '__main__':
         result = runner.run(test_unit.DependencyCheckerSuite())
         print(f"{result.testsRun} tests were run - {len(result.skipped)} tests skipped.") 
         print(f"{len(result.errors)} Errors. {len(result.failures)} Failures")
+    if to_test.all_tests or to_test.snapshot_factory_checker:
+        print("\nTesting FSP with Small Canary Tests:")
+        result = runner.run(test_unit.SnapshotFactorySuite())
+        print(f"{result.testsRun} tests were run - {len(result.skipped)} tests skipped.")
+        print(f"{len(result.errors)} Errors. {len(result.failures)} Failures")
     if to_test.all_tests or to_test.small_canary:
         print("\nTesting FSP with Small Canary Tests:")
         result = runner.run(test_functional.SmallCanarySuite())
         print(f"{result.testsRun} tests were run - {len(result.skipped)} tests skipped.")
         print(f"{len(result.errors)} Errors. {len(result.failures)} Failures")
-
