@@ -226,7 +226,7 @@ def get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two):
         for file in files:
             write_block_to_file(file, block, data)
     else:
-        get_changed_block(block, ebs, files, snapshot_id_two)  # We retry indefinitely on checksum failure.
+        get_changed_block(block, ebs, files, snapshot_id_one, snapshot_id_two)  # We retry indefinitely on checksum failure.
 
 # Read a Block locally, try to upload it.
 # Data Path: Local File / Block Device -> Memory -> EBS Direct API (via try_put_block()) -> EBS Snapshot
