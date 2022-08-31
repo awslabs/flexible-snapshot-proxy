@@ -6,9 +6,11 @@ High-performance open-source orchestration utility that utilizes EBS Direct APIs
 
 Help is available by running `src/main.py -h`.
 
-Some usage examples are available as full-stack canaries in `src/test_functional.py`.
+Some usage examples are available as full-stack canaries in [test_functional.py](src/test_functional.py).
 
 Example scenarios we have tested are in [Scenarios](Scenarios.md)
+
+IAM permissions required for reading and writing snapshots are documented [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebsapi-permissions.html).
 
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
@@ -30,8 +32,7 @@ src/main.py getfroms3 snapshotId DEST_S3_BUCKET
 
 ## Installation
 
-Currently, the utility will enumerate all Python package dependencies on runtime, and install necessary packages via `pip3` if they are not already installed on the system. It will show no indication of progress, and will not ask
-the user for permission to install additional packages.
+Currently, the utility will enumerate all Python package dependencies on runtime, and install necessary packages via `pip3` if they are not already installed on the system. It will show no indication of progress, and will not ask the user for permission to install additional packages.
 
 TODO: Ask user for permission, print a list of packages it is going to install.
 TODO: Get the package into PyPI so it could be installed via `pip3`.
@@ -40,16 +41,18 @@ TODO: Get the package into PyPI so it could be installed via `pip3`.
 
 Configuration of the transfer is performed at runtime with the following CLI arguments:
 
-```bash
+```
 Optional arguments:
   -h, --help            show this help message and exit
   -o ORIGIN_REGION, --origin_region ORIGIN_REGION
                         AWS Origin Region. Source of Snapshot copies. (default: .aws/config then us-east-1)
-  -d, --dry_run         Preform a dry run of FSP operation to check valid AWS permissions. (default: false)
+  -d, --dry_run         Perform a dry run of FSP operation to check valid AWS permissions. (default: false)
   -q, --quiet           quiet output
   -v, --verbosity       output verbosity. (Pass/Fail blocks per region)
   -vv                   increased output verbosity. (Pass/Fail for individual blocks)
   -vvv                  Maximum output verbosity. (All individual block retries will be recorded)
+  --nodeps              Do not verify/install dependencies.
+  --suppress_writes     Intended for underpowered devices. Will not write log files or check dependencies
 ```
 Additional advanced tuneables are currently in the source itself.
 
@@ -117,7 +120,7 @@ todo: Outline the design choices of high parallelization and sharing memory comp
 
 [Memory](Memory.md)
 
-[CPU](src/fsp.py#L7)
+[CPU](Cpu.md)
 
 [Network](src/fsp.py#L8)
 

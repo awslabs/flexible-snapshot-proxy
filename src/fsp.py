@@ -16,7 +16,6 @@
 
 #
 # Description: Fast EBS Direct API Client inspired by awslabs/coldsnap.
-# Author: Kirill Davydychev, kdavyd@amazon.com
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 #
 # Minimum requirements: 4 vCPU, 8GB RAM.
@@ -49,6 +48,7 @@ import sys
 import time
 import math
 import zstandard
+import platform
 from base64 import b64encode, urlsafe_b64encode
 from joblib import Parallel, delayed
 from multiprocessing import Manager
@@ -89,20 +89,25 @@ class Counter(object):
 # Output:           EBS Direct API Response that contains CHUNK_SIZE worth of data
 #
 def try_get_block(ebs, snapshot_id, block_index, block_token):
-    resp = None
+    response = None
     retry_count = 0
-    while resp is None:
+    while response is None:
         try:
-            resp = ebs.get_snapshot_block(
+            response = ebs.get_snapshot_block(
                 SnapshotId=snapshot_id, BlockIndex=block_index, BlockToken=block_token
             )
             continue
         except Exception as e:
-            retry_count += 1  # We catch all errors here, mostly it'll be API throttle events so we just assume. In theory should work with network interruptions as well.
-            if (retry_count > 1):  # Only alert for second retry, but keep trying indefinitely. First-time throttle events happen fairly regularly.
-                print (block_token, "throttled by API", retry_count, "times, retrying.")
+            # We catch all errors here, but mostly it'll be API throttle events. 
+            # We retry indefinitely on network interruptions, and only alert for second retry.
+            # First-time throttle events happen fairly regularly so we ignore them.
+            # TODO: Implement abort according to API best practices.
+            error_code = e.response['Error']['Code']
+            retry_count += 1  
+            if (retry_count > 1): 
+                log_snapshot_block_exception(block_token, retry_count, error_code, "Get")
             pass
-    return resp
+    return response
 
 
 # Description:      Wrapper around boto3 ebs.put_snapshot_block() with retry logic.
@@ -113,12 +118,12 @@ def try_get_block(ebs, snapshot_id, block_index, block_token):
 # Output:           EBS Direct API Response
 #
 def try_put_block(ebs, block, snap_id, data, checksum, count):
-    resp = None
+    response = None
     retry_count = 0
     if checksum != KNOWN_SPARSE_CHECKSUM or singleton.FULL_COPY:  # Known sparse block checksum we can skip
-        while resp is None:
+        while response is None:
             try:
-                resp = ebs.put_snapshot_block(
+                response = ebs.put_snapshot_block(
                     SnapshotId=snap_id,
                     BlockIndex=block,
                     BlockData=data,
@@ -128,12 +133,36 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
                 )
                 continue
             except Exception as e:
+                error_code = e.response['Error']['Code']
                 retry_count += 1
                 if retry_count > 1:
-                    print(block, "throttled by API", retry_count, "times, retrying.")
+                    log_snapshot_block_exception(block, retry_count, error_code, "Put")
                 pass
         count.increment()
-    return resp
+    return response
+
+
+# Description:      Helper function to provide helpful error messages for common quota-related issues.
+#                   See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/error-retries.html
+#                   Only GetSnapshotBlock and PutSnapshotBlock can throw a RequestThrottledException, 
+#                   so we handle them separately and provide helpful pointers to the right service quotas.
+def log_snapshot_block_exception(block, retry_count, error_code, operation):
+    if operation:
+        if operation == "Get":
+            if error_code == "ThrottlingException":
+                print (block, "exceeded GetSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-C125AE42")
+                return
+            elif error_code == "RequestThrottledException":
+                print (block, "exceeded GetSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-028ACFB9")
+                return
+        elif operation == "Put":
+            if error_code == "ThrottlingException":
+                print (block, "exceeded PutSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-AFAE1BE8")
+                return
+            elif error_code == "RequestThrottledException":
+                print (block, "exceeded PutSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-1774F84A")
+                return
+    print (block, "failed", operation, retry_count, "times, retrying.", error_code)
 
 
 # Description:      Helper function to write a block to a file at the right offset.
@@ -370,7 +399,10 @@ def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
 def validate_file_paths(files):
     for file in files:
         try:
-            os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), "rb+")
+            if platform.system() == "Windows":
+                os.fdopen(os.open(file, os.O_WRONLY), "rb+") # Windows doesn't allow O_CREAT on a PhysicalDrive
+            else: 
+                os.fdopen(os.open(file, os.O_WRONLY | os.O_CREAT), "rb+")
         except io.UnsupportedOperation:
             print ("ERROR:", file, "cannot be opened for writing or is not seekable. Please verify your file paths.\nIf you are using a device path to write to a raw volume, make sure to use /dev/nvmeXn1 and not /dev/nvmeX.")
             raise SystemExit
