@@ -105,7 +105,7 @@ def try_get_block(ebs, snapshot_id, block_index, block_token):
             error_code = e.response['Error']['Code']
             retry_count += 1  
             if (retry_count > 1): 
-                log_snapshot_block_exception(block_token, retry_count, error_code, "Get")
+                log_snapshot_block_exception(block_token, retry_count, error_code, "GetSnapshotBlock")
             pass
     return response
 
@@ -136,7 +136,7 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
                 error_code = e.response['Error']['Code']
                 retry_count += 1
                 if retry_count > 1:
-                    log_snapshot_block_exception(block, retry_count, error_code, "Put")
+                    log_snapshot_block_exception(block, retry_count, error_code, "PutSnapshotBlock")
                 pass
         count.increment()
     return response
@@ -148,14 +148,14 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
 #                   so we handle them separately and provide helpful pointers to the right service quotas.
 def log_snapshot_block_exception(block, retry_count, error_code, operation):
     if operation:
-        if operation == "Get":
+        if operation == "GetSnapshotBlock":
             if error_code == "ThrottlingException":
                 print (block, "exceeded GetSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-C125AE42")
                 return
             elif error_code == "RequestThrottledException":
                 print (block, "exceeded GetSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-028ACFB9")
                 return
-        elif operation == "Put":
+        elif operation == "PutSnapshotBlock":
             if error_code == "ThrottlingException":
                 print (block, "exceeded PutSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-AFAE1BE8")
                 return
