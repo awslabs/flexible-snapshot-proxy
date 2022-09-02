@@ -280,14 +280,16 @@ def setup_singleton(args):
         sys.exit(1) 
 
     user_canonical_id = ""
-    try:
-        session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
-        s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
-        user_canonical_id = s3.list_buckets()["Owner"]["ID"]
-    except s3.exceptions as e:
-        print("Error: Could not get canonical user id")
-        print(e)
-        return None
+    # If we don't use S3, we don't need to get canonical id, it's only used in validate_s3_bucket()
+    if args.command == "movetos3" or args.command == "getfroms3":
+        try:
+            session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
+            s3 = session.client('s3', endpoint_url=singleton.AWS_S3_ENDPOINT_URL)
+            user_canonical_id = s3.list_buckets()["Owner"]["ID"]
+        except botocore.exceptions.ClientError as e:
+            print("Error: Could not get canonical user ID from S3. Verify the account has correct IAM permissions.")
+            print(e, e.response['Error']['Code'])
+            return None
 
     # Find aws regions
     aws_origin_region = args.origin_region
