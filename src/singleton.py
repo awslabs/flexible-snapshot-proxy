@@ -45,6 +45,14 @@ class SingletonClass(object):
     AWS_S3_ENDPOINT_URL = None
     AWS_S3_PROFILE = None
 
+    """Dictionary of important quotas by API operation and Exception"""
+    AWS_SERVICE_QUOTAS = {
+      ("GetSnapshotBlock","ThrottlingException") : "L-C125AE42",
+      ("GetSnapshotBlock","RequestThrottledException") : "L-028ACFB9",
+      ("PutSnapshotBlock","ThrottlingException") : "L-AFAE1BE8",
+      ("PutSnapshotBlock","RequestThrottledException") : "L-1774F84A",
+    }
+
     def __new__(cls):
       if not hasattr(cls, 'instance'):
         cls.instance = super(SingletonClass, cls).__new__(cls)

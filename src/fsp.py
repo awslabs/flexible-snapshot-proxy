@@ -142,26 +142,26 @@ def try_put_block(ebs, block, snap_id, data, checksum, count):
     return response
 
 
-# Description:      Helper function to provide helpful error messages for common quota-related issues.
+# Description:      Helper function to provide helpful error messages for common issues.
 #                   See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/error-retries.html
 #                   Only GetSnapshotBlock and PutSnapshotBlock can throw a RequestThrottledException, 
 #                   so we handle them separately and provide helpful pointers to the right service quotas.
 def log_snapshot_block_exception(block, retry_count, error_code, operation):
     if operation:
-        if operation == "GetSnapshotBlock":
-            if error_code == "ThrottlingException":
-                print (block, "exceeded GetSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-C125AE42")
-                return
-            elif error_code == "RequestThrottledException":
-                print (block, "exceeded GetSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-028ACFB9")
-                return
-        elif operation == "PutSnapshotBlock":
-            if error_code == "ThrottlingException":
-                print (block, "exceeded PutSnapshotBlock requests per account limit", retry_count, "times, retrying. See quota L-AFAE1BE8")
-                return
-            elif error_code == "RequestThrottledException":
-                print (block, "exceeded PutSnapshotBlock requests per snapshot limit", retry_count, "times, retrying. See quota L-1774F84A")
-                return
+        if operation == "GetSnapshotBlock" or operation == "PutSnapshotBlock":
+            limit_level = ""
+            if error_code == "ThrottlingException": limit_level = "account"
+            elif error_code == "RequestThrottledException": limit_level = "snapshot"
+            print ( block, "exceeded", 
+                    operation, "requests per", 
+                    limit_level, "limit", 
+                    retry_count, "times, retrying. See quota", 
+                    singleton.AWS_SERVICE_QUOTAS[operation, error_code])
+            return
+        if error_code == "AccessDeniedException":
+            print (block, "failed", operation, retry_count, "times, aborting.", error_code, ". Please verify your IAM permissions." )
+            sys.exit(77)
+    # Fall through in case we hit unanticipated error code
     print (block, "failed", operation, retry_count, "times, retrying.", error_code)
 
 
