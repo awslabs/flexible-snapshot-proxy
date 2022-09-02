@@ -12,29 +12,6 @@ Example scenarios we have tested are in [Scenarios](Scenarios.md)
 
 IAM permissions required for reading and writing snapshots are documented [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebsapi-permissions.html).
 
-Here is the list of necessary permissions:
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "ec2:DescribeSnapshots",
-                "ec2:DescribeRegions",
-                "ebs:StartSnapshot",
-                "ebs:ListSnapshotBlocks",
-                "ebs:ListChangedBlocks",
-                "ebs:GetSnapshotBlock",
-                "s3:GetBucketAcl",
-                "s3:ListBucket",
-                "s3:PutObject",
-                "s3:GetObject"
-            ],
-            "Resource": "*"
-        }
-    ]
-}
-
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
 ```python3
@@ -59,33 +36,6 @@ Currently, the utility will enumerate all Python package dependencies on runtime
 
 TODO: Ask user for permission, print a list of packages it is going to install.
 TODO: Get the package into PyPI so it could be installed via `pip3`.
-
-Windows:
-Open CMD using 'Run as Administrator'.
-
-Download and Install Chocolatey using the following command.
-
-@"%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -InputFormat None -ExecutionPolicy Bypass -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))" && SET "PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin"
-Download and install python using the following command.
-choco install -y python3
-You can check the version to verify if Python was successfully installed as follows.
-python --version
-
-configure AWS Account 
-AWS  configure 
-
-Install dependencies by running src/main.py for the first time such as 
-src/main.py list ORG_SNAP 
-
-Automount is enabled by default in Windows. When enabled, Windows automatically mounts the file system for a new volume (disk or drive) when it is added (connected) to the system, and then assigns a drive letter to the volume. Disk corruption can occur if data is changed on the drive while sanpshots deltas are being downloaded. To prevent this disable automounting of drives. 
-
-1. Open CMD using 'Run as Administrator'. 
-
-2. Type diskpart into the elevated command prompt, and press Enter. (see screenshot below)
-
-3. Type automount disable into the elevated command prompt, and press Enter.
-
-After the snapshots have been downloaded assing drive letters to each of the volume.
 
 ## Configuration
 
