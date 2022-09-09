@@ -331,7 +331,7 @@ def get_segment_from_s3(object, snap, count):
     response = s3.get_object(Bucket=singleton.S3_BUCKET, Key=object["Key"])
     name = object["Key"].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
     if name[3] == "zstd":
-        data = zstandard.decompress(response["body"].read())
+        data = zstandard.decompress(response["Body"].read())
         h.update(data)
         if urlsafe_b64encode(h.digest()).decode() == name[1]:
             for i in range(int(name[2])):
@@ -547,14 +547,12 @@ def validate_s3_bucket(region, check_is_read, check_is_write): #Return if user h
                     break
         if found == False:
             valid = False
-    except s3.exceptions as e:
-        print(e)
-        valid = False
     except HTTPError as e:
         print(f"The bucket {singleton.S3_BUCKET} does not exist in AWS account {singleton.AWS_ACCOUNT_ID} for region {region}")
         valid = False
     except Exception as e:
         print("Could not validate s3 bucket")
+        print (e, e.response['Error']['Code']);
         valid = False
     if valid == False:
         print("\nExiting")
