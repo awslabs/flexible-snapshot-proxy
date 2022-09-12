@@ -732,7 +732,7 @@ def getfroms3(snapshot_prefix):
             compressed_size += object["Size"]
         print('Snapshot', snapshot_prefix, 'contains', len(objects), 'segments and', compressed_size, 'compressed bytes')       
     snap = ebs.start_snapshot(VolumeSize=int(objects[0]["Key"].split("/")[0].split(".")[1]), Description='Restored by fsp.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]["Key"].split("/")[0])
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(n_jobs=128, require="sharedmem") as parallel:
         parallel(
             delayed(get_segment_from_s3)(object, snap["SnapshotId"], count) 
             for object in objects
