@@ -760,12 +760,13 @@ def getfroms3(snapshot_prefix):
     else:
         for object in objects:
             compressed_size += object["Size"]
-        print('Snapshot', snapshot_prefix, 'contains', len(objects), 'segments and', compressed_size, 'compressed bytes')       
+        print('Snapshot', snapshot_prefix, 'contains', len(objects), 'segments and', compressed_size, 'compressed bytes')
     snap = ebs.start_snapshot(VolumeSize=int(objects[0]["Key"].split("/")[0].split(".")[1]), Description='Restored by fsp.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]["Key"].split("/")[0])
-    with Parallel(n_jobs=128, require="sharedmem") as parallel:
+    split = np.array_split(objects, singleton.NUM_JOBS)
+    with Parallel(singleton.NUM_JOBS, require="sharedmem") as parallel:
         parallel(
-            delayed(get_segment_from_s3)(object, snap["SnapshotId"], count) 
-            for object in objects
+            delayed(get_segments_from_s3)(object_array, snap["SnapshotId"], count)
+            for object_array in split
         )
     print('getfroms3 took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - start_time),2), 'bytes/sec.')
     ebs.complete_snapshot(SnapshotId=snap["SnapshotId"], ChangedBlocksCount=count.value())

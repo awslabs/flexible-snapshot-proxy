@@ -310,10 +310,10 @@ def setup_singleton(args):
         # In testing, I was able to get 450MB/s between N.Virginia and Australia/Tokyo.
         num_jobs = 27
 
-    if args.command == "movetos3" or args.command == "getfroms3":
+    if args.command == "movetos3":
         # In the S3 codepath, we don't use nested threadpools since we nest chunks inside segments. More threads makes sense here,
         # tested 128 as a good figure for single-region. Multi-region has higher latency, so multiply by 8 as well.
-        num_jobs = num_jobs * 8 
+        num_jobs = num_jobs * 8
 
     full_copy =  False
     if "full_copy" in args:
