@@ -721,11 +721,16 @@ def getfroms3(snapshot_prefix):
     response = s3.list_objects_v2(Bucket=singleton.S3_BUCKET, Prefix=snapshot_prefix)
     objects = response["Contents"]
     count = Counter(Manager(), 0)
+    compressed_size = 0
     while "NextContinuationToken" in response:
         response = s3.list_objects_v2(Bucket=singleton.S3_BUCKET, Prefix=snapshot_prefix, ContinuationToken = response["NextContinuationToken"])
         objects.extend(response["Contents"])
     if len(objects) == 0:
         print("No snapshots found for prefix %s in bucket %s" % (snapshot_prefix, singleton.S3_BUCKET))
+    else:
+        for object in objects:
+            compressed_size += object["Size"]
+        print('Snapshot', snapshot_prefix, 'contains', len(objects), 'segments and', compressed_size, 'compressed bytes')       
     snap = ebs.start_snapshot(VolumeSize=int(objects[0]["Key"].split("/")[0].split(".")[1]), Description='Restored by fsp.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]["Key"].split("/")[0])
     with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
         parallel(
