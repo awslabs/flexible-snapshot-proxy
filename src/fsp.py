@@ -329,36 +329,13 @@ def get_segments_from_s3(objects, snap, count, singleton):
     )
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
-            delayed(get_segment_from_s3_v2)(object, snap, count, ebs, s3) 
+            delayed(get_segment_from_s3)(object, snap, count, ebs, s3, singleton) 
             for object in objects
         )
 
 # Get a Segment from S3, uncompress, disassemble into Blocks, copy to EBS Snapshot.
 # Data Path: S3 -> Local Memory -> EBS Snapshot (via try_put_block())
-def get_segment_from_s3_v2(object, snap, count, ebs, s3):
-    h = hashlib.sha256()
-    response = s3.get_object(Bucket=singleton.S3_BUCKET, Key=object["Key"])
-    name = object["Key"].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
-    if name[3] == "zstd":
-        data = zstandard.decompress(response["Body"].read())
-        h.update(data)
-        if urlsafe_b64encode(h.digest()).decode() == name[1]:
-            for i in range(int(name[2])):
-                chunk = data[CHUNK_SIZE * i : CHUNK_SIZE * (i + 1)]
-                h.update(chunk)
-                checksum = b64encode(hashlib.sha256(chunk).digest()).decode()
-                try_put_block(ebs, int(name[0]) + i, snap, chunk, checksum, count)
-
-# Get a Segment from S3, uncompress, disassemble into Blocks, copy to EBS Snapshot.
-# Data Path: S3 -> Local Memory -> EBS Snapshot (via try_put_block())
-def get_segment_from_s3(object, snap, count):
-    ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
-    session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
-    s3 = session.client(
-        "s3",
-        region_name=singleton.AWS_ORIGIN_REGION,
-        endpoint_url=singleton.AWS_S3_ENDPOINT_URL
-    )
+def get_segment_from_s3(object, snap, count, ebs, s3, singleton):
     h = hashlib.sha256()
     response = s3.get_object(Bucket=singleton.S3_BUCKET, Key=object["Key"])
     name = object["Key"].split("/")[1].split(".") # Name format: snapshot_id.volsize/offset.checksum.length.compressalgo
