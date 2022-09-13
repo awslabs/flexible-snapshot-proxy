@@ -12,9 +12,34 @@ Example scenarios we have tested are in [Scenarios](Scenarios.md)
 
 IAM permissions required for reading and writing snapshots are documented [here](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ebsapi-permissions.html).
 
+Below  is an example IAM template:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeRegions",
+                "ebs:StartSnapshot",
+                "ebs:ListSnapshotBlocks",
+                "ebs:ListChangedBlocks",
+                "ebs:GetSnapshotBlock",
+                "s3:GetBucketAcl",
+                "s3:ListBucket",
+                "s3:PutObject",
+                "s3:GetObject",
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
-```python3
+```bash
 % cat test/test_functional.py|grep python3 | cut -d "/" -f 2-3 | awk -F"[{']" '{print $1 $3 " " $6 " " $9}'
 
 src/main.py list ORG_SNAP  
@@ -67,7 +92,7 @@ TODO: implement a `setup.py` script for CLI configuration/installation.
 ## Features
 
 Flexible Snapshot Proxy supports the following commands:
-```bash
+```
 list                Returns accurate size of an EBS Snapshot by enumerating
                     actual consumed/allocated space. 
 
@@ -97,9 +122,9 @@ sync                Synchronizes the incremental difference between 2
                     changes.
 
 movetos3            Transfers an EBS Snapshot or an arbitrary image file / block 
-(TODO: verify		device to a customer-owned S3 Bucket (any S3 Storage Class, or 
-block->S3 path)		Snow Family), with zstandard compression, tuneable object 
-					size and an independent segment checksum.
+(TODO: verify       device to a customer-owned S3 Bucket (any S3 Storage Class, or 
+block->S3 path)     Snow Family), with zstandard compression, tuneable object 
+					          size and an independent segment checksum.
 
 getfroms3           Transfers a Snapshot stored in a customer-owned S3
                     Bucket to a new block volume or file.
@@ -109,8 +134,8 @@ multiclone          Same functionality as `download`, but writing to
                     snapshot to multiple volumes.
 
 fanout              Upload from arbitrary file or block device to 
-					multiple EBS Snapshot(s) in parallel, provided a list 
-					of regions. 
+					          multiple EBS Snapshot(s) in parallel, provided a list 
+					          of regions. 
 ```
 ## Design Overview
 
