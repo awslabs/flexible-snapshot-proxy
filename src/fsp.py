@@ -284,7 +284,7 @@ def get_blocks_s3(array, snapshot_prefix):
 
 # Copy Segments to S3 in parallel.
 # Data Path:  -> S3
-def put_segments_to_s3(snapshot_id, array, volume_size, s3bucket):
+def put_segments_to_s3(snapshot_id, array, volume_size, singleton):
     ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION)  # we spawn a client per snapshot segment
     session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
     s3 = session.client(
@@ -301,7 +301,7 @@ def put_segments_to_s3(snapshot_id, array, volume_size, s3bucket):
     h.update(data)
     s3.put_object(
         Body=zstandard.compress(data, 1),
-        Bucket=s3bucket, Key="{}.{}/{}.{}.{}.zstd".format(snapshot_id,
+        Bucket=singleton.S3_BUCKET, Key="{}.{}/{}.{}.{}.zstd".format(snapshot_id,
             volume_size,
             offset,
             urlsafe_b64encode(h.digest()).decode(), len(data) // CHUNK_SIZE
@@ -317,7 +317,7 @@ def put_segments_fanout(array, source, f, ebsclient_snaps):
             for block in array
         )
 
-def get_segments_from_s3(objects, snap, count):
+def get_segments_from_s3(objects, snap, count, singleton):
     # We spawn an EBS and an S3 client per array of segments
     ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION) 
     session=boto3.Session(profile_name=singleton.AWS_S3_PROFILE)
@@ -326,7 +326,7 @@ def get_segments_from_s3(objects, snap, count):
         region_name=singleton.AWS_ORIGIN_REGION,
         endpoint_url=singleton.AWS_S3_ENDPOINT_URL
     )
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel2:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
             delayed(get_segment_from_s3_v2)(object, snap, count, ebs, s3) 
             for object in objects
@@ -401,7 +401,7 @@ def get_block_s3(block, ebs, s3, snapshot_prefix):
 
 # Wrapper around get_block() that parallelizes individual get_block() retrievals.
 # Data Path:
-def get_blocks(array, files, snapshot_id):
+def get_blocks(array, files, snapshot_id, singleton):
     ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
@@ -477,7 +477,7 @@ def copy_block_to_snap(command, snapshot, block, ebs, ebs2, snap, count):
 
 # Wrapper around put_block_from_file() that parallelizes individual block uploads.
 # Data path: File / Device -> EBS Direct API -> EBS Snapshot
-def put_blocks(array, snap_id, OUTFILE, count):
+def put_blocks(array, snap_id, OUTFILE, count, singleton):
     ebs = boto3.client("ebs", region_name=singleton.AWS_DEST_REGION)
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
@@ -627,8 +627,8 @@ def download(snapshot_id, file_path):
     start_time = time.perf_counter()
     num_blocks = len(blocks)
     print(files)
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
-        parallel(delayed(get_blocks)(array, files, snapshot_id) for array in split)
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
+        parallel(delayed(get_blocks)(array, files, snapshot_id, singleton) for array in split)
     print('download took',round(time.perf_counter() - start_time, 2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time), 2), 'bytes/sec.')
 
 def deltadownload(snapshot_id_one, snapshot_id_two, file_path):
@@ -668,9 +668,9 @@ def upload(file_path, parent_snapshot_id):
             snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path)
         else:
             snap = ebs.start_snapshot(VolumeSize=gbsize, Description="Uploaded by fsp.py from "+file_path, ParentSnapshotId=parent_snapshot_id)
-        with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+        with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
             parallel(
-                delayed(put_blocks)(array, snap["SnapshotId"], file_path, count) 
+                delayed(put_blocks)(array, snap["SnapshotId"], file_path, count, singleton) 
                 for array in split
             )
         ebs.complete_snapshot(SnapshotId=snap["SnapshotId"], ChangedBlocksCount=count.value())
@@ -735,9 +735,9 @@ def movetos3(snapshot_id):
     num_blocks = len(blocks)
     ec2 = boto3.client("ec2", region_name=singleton.AWS_ORIGIN_REGION)
     gbsize = ec2.describe_snapshots(SnapshotIds=[snapshot_id,],)["Snapshots"][0]["VolumeSize"]
-    with Parallel(n_jobs=128, require="sharedmem") as parallel:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(put_segments_to_s3)(snapshot_id, array, gbsize, singleton.S3_BUCKET)
+            delayed(put_segments_to_s3)(snapshot_id, array, gbsize, singleton)
             for array in chunk_and_align(blocks, 1, 64)
         )
     print('movetos3 took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -763,9 +763,9 @@ def getfroms3(snapshot_prefix):
         print('Snapshot', snapshot_prefix, 'contains', len(objects), 'segments and', compressed_size, 'compressed bytes')
     snap = ebs.start_snapshot(VolumeSize=int(objects[0]["Key"].split("/")[0].split(".")[1]), Description='Restored by fsp.py from S3://'+singleton.S3_BUCKET+'/'+objects[0]["Key"].split("/")[0])
     split = np.array_split(objects, singleton.NUM_JOBS)
-    with Parallel(singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(get_segments_from_s3)(object_array, snap["SnapshotId"], count)
+            delayed(get_segments_from_s3)(object_array, snap["SnapshotId"], count, singleton)
             for object_array in split
         )
     print('getfroms3 took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * count.value() / (time.perf_counter() - start_time),2), 'bytes/sec.')
