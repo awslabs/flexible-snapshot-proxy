@@ -244,7 +244,7 @@ def put_block_from_file(block, ebs, snap_id, OUTFILE, count):
 
 # Read a Block locally, try to upload it to multiple destinations in parallel.
 # Data Path: Local File / Block Device -> Memory -> EBS Direct APIs (via try_put_block()) -> EBS Snapshots
-def put_block_from_file_fanout(block, source, f, ebsclient_snaps):
+def put_block_from_file_fanout(block, source, f, ebsclient_snaps, singleton):
     block = int(block)
     with os.fdopen(os.open(source, os.O_RDONLY | os.O_NONBLOCK), "rb+") as f:
         f.seek((block) * CHUNK_SIZE)
@@ -253,6 +253,7 @@ def put_block_from_file_fanout(block, source, f, ebsclient_snaps):
             return
         data = data.ljust(CHUNK_SIZE, b"\0")
         checksum = b64encode(hashlib.sha256(data).digest()).decode()
+        # This is the only case where we should use "sharedmem" - at the third level of nesting.
         with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel3:
             parallel3(delayed(try_put_block)(
                 ebsclient_snaps[ebsclient_snap]["client"],
@@ -310,10 +311,10 @@ def put_segments_to_s3(snapshot_id, array, volume_size, singleton):
 
 # Copy Segments to S3 in parallel.
 # Data Path: -> S3
-def put_segments_fanout(array, source, f, ebsclient_snaps):
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel2:
+def put_segments_fanout(array, source, f, ebsclient_snaps, singleton):
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
-            delayed(put_block_from_file_fanout)(block, source, f, ebsclient_snaps) 
+            delayed(put_block_from_file_fanout)(block, source, f, ebsclient_snaps, singleton) 
             for block in array
         )
 
@@ -414,7 +415,7 @@ def get_blocks(array, files, snapshot_id, singleton):
 
 # Wrapper around get_changed_block() that parallelizes individual get_changed_block() retrievals.
 # Data Path:
-def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two):
+def get_changed_blocks(array, files, snapshot_id_one, snapshot_id_two, singleton):
     ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
         parallel2(
@@ -452,7 +453,7 @@ def validate_file_paths_read(files):
 
 # Wrapper that parallelizes copying blocks between EBS Snapshots.
 # Data Path: EBS Snapshot -> Direct API -> Local Memory -> Direct API 2 -> EBS Snapshot 2
-def copy_blocks_to_snap(command, snapshot, array, snap, count):
+def copy_blocks_to_snap(command, snapshot, array, snap, count, singleton):
     ebs = boto3.client("ebs", region_name=singleton.AWS_ORIGIN_REGION) # we spawn a client per snapshot segment
     ebs2 = boto3.client("ebs", region_name=singleton.AWS_DEST_REGION) # Using separate client for upload. This will allow cross-region/account copies.
     with Parallel(n_jobs=singleton.NUM_JOBS) as parallel2:
@@ -643,9 +644,9 @@ def deltadownload(snapshot_id_one, snapshot_id_two, file_path):
     num_blocks = len(blocks)
     print('Changes between', snapshot_id_one, 'and', snapshot_id_two, 'contain', len(blocks), 'chunks and', CHUNK_SIZE * len(blocks), 'bytes, took', round (time.perf_counter() - start_time,2), "seconds.")
     print(files)
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(get_changed_blocks)(array, files, snapshot_id_one, snapshot_id_two)
+            delayed(get_changed_blocks)(array, files, snapshot_id_one, snapshot_id_two, singleton)
             for array in split
         )  # retrieve the blocks of snapshot_one missing in snapshot_two
     print('deltadownload took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -692,9 +693,9 @@ def copy(snapshot_id):
     gbsize = ec2.describe_snapshots(SnapshotIds=[snapshot_id,],)["Snapshots"][0]["VolumeSize"]
     count = Counter(Manager(), 0)
     snap = ebs2.start_snapshot(VolumeSize=gbsize, Description='Copied by fsp.py from '+snapshot_id)
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(copy_blocks_to_snap)('copy', snapshot_id, array, snap, count)
+            delayed(copy_blocks_to_snap)('copy', snapshot_id, array, snap, count, singleton)
             for array in split
         )
     print('copy took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -717,9 +718,9 @@ def sync(snapshot_id_one, snapshot_id_two, destination_snapshot):
     count = Counter(Manager(), 0)
     snap = ebs.start_snapshot(ParentSnapshotId=destination_snapshot, VolumeSize=gbsize, Description='Copied delta by fsp.py from '+snapshot_id_one+'to'+snapshot_id_two)
     print(snap["SnapshotId"])
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(copy_blocks_to_snap)('sync', snapshot_id_two, array, snap, count)
+            delayed(copy_blocks_to_snap)('sync', snapshot_id_two, array, snap, count, singleton)
             for array in split
         )
     print('sync took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
@@ -785,9 +786,9 @@ def multiclone(snapshot_id, infile):
     start_time = time.perf_counter()
     num_blocks = len(blocks)
     print(files)
-    with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+    with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
         parallel(
-            delayed(get_blocks)(array, files, snapshot_id) for array in split
+            delayed(get_blocks)(array, files, snapshot_id, singleton) for array in split
         )
     print('multiclone took',round(time.perf_counter() - start_time,2), 'seconds at', round(CHUNK_SIZE * num_blocks / (time.perf_counter() - start_time),2), 'bytes/sec.')
 
@@ -815,9 +816,9 @@ def fanout(device_path, destination_regions):
                 "count":Counter(Manager(), 0)
             }
         print("Spawned", len(ebsclient_snaps), "EBS Clients and started a snapshot in each region.")
-        with Parallel(n_jobs=singleton.NUM_JOBS, require="sharedmem") as parallel:
+        with Parallel(n_jobs=singleton.NUM_JOBS) as parallel:
             parallel(
-                delayed(put_segments_fanout)(array, device_path, f, ebsclient_snaps) 
+                delayed(put_segments_fanout)(array, device_path, f, ebsclient_snaps, singleton) 
                 for array in split
             )
         output = {}
