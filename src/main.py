@@ -469,7 +469,11 @@ if __name__ == "__main__":
             os.remove(timestamp_file)
         open(timestamp_file, "a").close()  # Create the timestamp file to cache dependencies check for 1 week
 
-        print("Dependencies \U00002705")  # unicode for GREEN CHECK
+        try:
+            print("Dependencies \U00002705")  # unicode for GREEN CHECK
+        except UnicodeEncodeError as e:
+            print("Dependencies verified")
+            pass
 
     setup_singleton(args)
 
