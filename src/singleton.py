@@ -29,6 +29,7 @@ class SingletonClass(object):
     S3_BUCKET = None  # S3 bucket where snapshots are stored or will be stored in
     VERBOSITY_LEVEL = None  # -1 quite. 1,2,3 for v, vv, vvv respectively
     DRY_RUN = None  # Run a FSP Action, only checking permissions
+    ESTIMATE = None # Estimate cost
     NODEPS = None  # Skip Dependency Checks
     SUPPRESS_WRITES = None  # Script will not produce log files
 

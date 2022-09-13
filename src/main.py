@@ -192,6 +192,7 @@ def arg_parse(args):
     parser = argparse.ArgumentParser(description='Flexible Snapshot Proxy (FSP) CLI.')
     parser.add_argument("-o", "--origin_region", default="us-east-1", help="AWS Origin Region - source of Snapshots. (default: .aws/config then us-east-1)")
     parser.add_argument("-d", "--dry_run", default=False, action="store_true", help="Perform a dry run of FSP operation to check valid AWS permissions. (default: false)")
+    parser.add_argument("-e", "--estimate", default=False, action="store_true", dest="estimate", help="Estimate number of API calls and amount of data to be transferred.")
     parser.add_argument("-q", "--quiet", default=False, action="store_true", dest="q", help="Quiet output.")
     parser.add_argument("-v", "--verbosity", default=False, action="store_true", dest="v", help="Output verbosity. (Pass/Fail blocks per region)")
     parser.add_argument("-vv", default=False, action="store_true", dest="vv", help="Increased output verbosity. (Pass/Fail for individual blocks)")
@@ -319,6 +320,10 @@ def setup_singleton(args):
     if "full_copy" in args:
         full_copy = args.full_copy
 
+    estimate = False
+    if "estimate" in args:
+        estimate = args.estimate
+
     s3_bucket = None
     if "s3Bucket" in args:
         s3_bucket = args.s3Bucket
@@ -390,6 +395,7 @@ def setup_singleton(args):
     singleton.S3_BUCKET = s3_bucket
     singleton.VERBOSITY_LEVEL = verbosity
     singleton.DRY_RUN = dry_run
+    singleton.ESTIMATE = estimate
     singleton.NODEPS = nodeps
     singleton.SUPPRESS_WRITES = suppress_writes
 
