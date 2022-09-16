@@ -23,19 +23,32 @@ Below  is an example IAM template:
                 "ec2:DescribeSnapshots",
                 "ec2:DescribeRegions",
                 "ebs:StartSnapshot",
+                "ebs:PutSnapshotBlock",
                 "ebs:ListSnapshotBlocks",
                 "ebs:ListChangedBlocks",
                 "ebs:GetSnapshotBlock",
-                "s3:GetBucketAcl",
-                "s3:ListBucket",
-                "s3:PutObject",
-                "s3:GetObject",
+                "ebs:CompleteSnapshot"
             ],
             "Resource": "*"
         }
     ]
 }
 ```
+
+If you require integration with s3 following are the additional permissions necessary.
+       {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListAllMyBuckets",
+                "s3:GetBucketAcl",
+                "s3:ListBucket",
+                "s3:PutObject",
+                "s3:GetObject"
+            ],
+            "Resource": "arn:aws:s3:::*"
+        }
+
+        
 
 The below one-liner will generate a list of all commands for which test cases exist, and show their syntax.
 
