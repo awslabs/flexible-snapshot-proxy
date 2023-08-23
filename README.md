@@ -6,7 +6,7 @@ High-performance open-source orchestration utility that utilizes EBS Direct APIs
 
 Help is available by running `src/main.py -h`.
 
-Some usage examples are available as full-stack canaries in [test_functional.py](src/test_functional.py).
+Some usage examples are available as full-stack canaries in [test_functional.py](test/test_functional.py).
 
 Example scenarios we have tested are in [Scenarios](Scenarios.md)
 
