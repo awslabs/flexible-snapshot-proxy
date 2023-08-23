@@ -97,7 +97,7 @@ This third number tells us the amount of **new** blocks that were allocated betw
 | snap-0016a2ad9124da55c | 33134477312 | 29498015744 | 27270316032 | 2227699712 |
 | snap-007e2f49d0b83a51e | 33303822336 | 4444913664 | 169345024 | 4275568640 |
 
-Based on this data, we can perform a hypothetical exercise. If we delete the first three snapshots, we will release 89128780 + 212860928 + 4275568640 = 4577558348 bytes of data, thus saving $2.29/month with the current price of snapshots in a region like us-east-1.
+Based on this data, we can perform a hypothetical exercise. If we delete the first three snapshots, we will release 89128780 + 212860928 + 4275568640 = 4577558348 bytes of data, thus saving $0.23/month with the current price of snapshots in a region like us-east-1.
 
 To summarize this as a formula, for each two snapshots, the tool provides us three numbers - let's call them S1, S2 and D12. We compute a fourth number, C12 = D12 - (S2 - S1), and C12 * Price/GB is our savings from deleting S1. 
 
