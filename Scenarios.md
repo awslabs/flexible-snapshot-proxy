@@ -70,6 +70,7 @@ Changes between snap-0016a2ad9124da55c and snap-007e2f49d0b83a51e contain 8478 c
 The below table summarizes the sizes we got in bytes.
 
 | Snapshot ID | Full size | Changes from previous snapshot |
+| --- | --- | --- |
 | snap-0668eefa53e9ab533 | 5856821248 | 0 |
 | snap-0e4fed7f9271160b5 | 5857869824 | 90177536 |
 | snap-08e18f70bec285993 | 5864161280 | 219152384 |
@@ -79,6 +80,7 @@ The below table summarizes the sizes we got in bytes.
 We can do additional math with it by subtracting the size of each two snapshots from each other:
 
 | Snapshot ID | Full size | Changes from previous snapshot | Difference in full size |
+| --- | --- | --- | --- |
 | snap-0668eefa53e9ab533 | 5856821248 | 0 | 
 | snap-0e4fed7f9271160b5 | 5857869824 | 90177536 | 1048756 |
 | snap-08e18f70bec285993 | 5864161280 | 219152384 | 6291456 |
@@ -88,6 +90,7 @@ We can do additional math with it by subtracting the size of each two snapshots 
 This third number tells us the amount of **new** blocks that were allocated between snapshots, i.e. new writes. If we substract the new writes from the delta (second number), we get the amount of overwritten blocks in the same time period. Distinguishing the two is important - if we delete the first snapshot, the newly written chunks are not released and effectively move to the second snapshot, but the old chunks in the first snapshot that were overwritten are deleted, releasing space. 
 
 | Snapshot ID | Full size | Changes from previous snapshot | New writes | Overwrites |
+| --- | --- | --- | --- | --- |
 | snap-0668eefa53e9ab533 | 5856821248 | 0 | 0 | 0 |
 | snap-0e4fed7f9271160b5 | 5857869824 | 90177536 | 1048756 | 89128780 |
 | snap-08e18f70bec285993 | 5864161280 | 219152384 | 6291456 | 212860928 |
