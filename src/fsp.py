@@ -631,7 +631,7 @@ def upload(file_path, parent_snapshot_id):
         f.seek(0, os.SEEK_END)
         size = f.tell()
         gbsize = math.ceil(size / GIGABYTE)
-        chunks = size // CHUNK_SIZE
+        chunks = math.ceil(size / CHUNK_SIZE)
         split = np.array_split(range(chunks), singleton.NUM_JOBS)
         count = Counter(Manager(), 0)
         print("Size of", file_path, "is", size, "bytes and", chunks, "chunks")
